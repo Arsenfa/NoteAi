@@ -27,8 +27,11 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+
 val Context.dataStore by preferencesDataStore(name = "settings")
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class NoteViewModel(private val repository: NoteRepository, private val context: Context) : ViewModel() {
 
     private val syncManager = NoteSyncManager(repository)
@@ -325,6 +328,13 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         }
     }
 
+    fun toggleNotePin(noteId: Long) {
+        viewModelScope.launch {
+            repository.togglePin(noteId)
+        }
+        triggerSync()
+    }
+
     // CRUD Note operations
     fun createEmptyNote() {
         viewModelScope.launch {
@@ -361,11 +371,16 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     fun deleteActiveNote() {
         val currentId = activeNoteId.value ?: return
         viewModelScope.launch {
+            val note = repository.getNoteByIdSync(currentId)
+            note?.let {
+                if (it.noteUuid.isNotEmpty()) {
+                    syncManager.deleteNoteFromCloud(it.noteUuid)
+                }
+            }
             repository.deleteNoteById(currentId)
             selectActiveNote(null)
             navigateTo("home_list")
         }
-        triggerSync()
     }
 
     // Checklist toggles

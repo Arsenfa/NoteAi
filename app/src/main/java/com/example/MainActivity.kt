@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -1226,6 +1227,25 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val syncing by viewModel.isSyncing.collectAsState()
+                    val infiniteTransition = rememberInfiniteTransition(label = "syncSpin")
+                    val syncRotation by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 360f,
+                        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
+                        label = "syncRotation"
+                    )
+                    IconButton(
+                        onClick = { if (!syncing) viewModel.triggerSync() },
+                        enabled = !syncing
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Sync now",
+                            tint = if (syncing) AccentDeep else TextPrimary,
+                            modifier = if (syncing) Modifier.graphicsLayer { rotationZ = syncRotation } else Modifier
+                        )
+                    }
                     IconButton(onClick = {
                         val nextGrid = !isGrid
                         viewModel.isGridView.value = nextGrid
@@ -1278,7 +1298,7 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                         .padding(horizontal = 24.dp)
                 ) {
                     items(notes, key = { it.id }) { note ->
-                        NoteListRow(note = note, onClick = { viewModel.selectActiveNote(note.id) })
+                        NoteListRow(note = note, onClick = { viewModel.selectActiveNote(note.id) }, viewModel = viewModel)
                     }
                 }
             } else {
@@ -1328,7 +1348,7 @@ fun CategoryChip(title: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun NoteListRow(note: Note, onClick: () -> Unit) {
+fun NoteListRow(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1353,7 +1373,18 @@ fun NoteListRow(note: Note, onClick: () -> Unit) {
                 val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
                 sdf.format(Date(note.updatedAt))
             }
-            Text(formattedDate, fontSize = 11.sp, color = TextTertiary)
+            Text(formattedDate, fontSize = 11.sp, color = TextTertiary, modifier = Modifier.padding(start = 8.dp))
+            IconButton(
+                onClick = { viewModel.toggleNotePin(note.id) },
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = if (note.isPinned) Icons.Default.PushPin else Icons.Default.BookmarkAdd,
+                    contentDescription = if (note.isPinned) "Unpin" else "Pin",
+                    tint = if (note.isPinned) AccentDeep else TextTertiary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
         Spacer(modifier = Modifier.height(4.dp))
         Row(
@@ -1413,12 +1444,32 @@ fun NoteGridCard(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
                 )
             }
 
-            Text(
-                text = if (note.title.isBlank()) "Untitled note" else note.title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = if (note.title.isBlank()) "Untitled note" else note.title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = { viewModel.toggleNotePin(note.id) },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = if (note.isPinned) Icons.Default.PushPin else Icons.Default.BookmarkAdd,
+                        contentDescription = if (note.isPinned) "Unpin" else "Pin",
+                        tint = if (note.isPinned) AccentDeep else TextTertiary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
 
             // Checklist state preview inside grid card
             if (note.checklistJson != null) {

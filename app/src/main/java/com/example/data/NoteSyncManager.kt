@@ -35,6 +35,19 @@ class NoteSyncManager(
         }
     }
 
+    suspend fun deleteNoteFromCloud(noteUuid: String): Result<Unit> {
+        val userId = currentUserId
+            ?: return Result.failure(Exception("User not authenticated"))
+
+        return try {
+            notesCollection().document(noteUuid).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Cloud delete failed", e)
+            Result.failure(e)
+        }
+    }
+
     private suspend fun pushLocalNotes(userId: String) {
         val unsynced = repository.getUnsyncedNotes()
         for (note in unsynced) {

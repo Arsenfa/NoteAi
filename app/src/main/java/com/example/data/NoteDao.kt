@@ -23,6 +23,9 @@ interface NoteDao {
     @Query("UPDATE notes SET cloudSynced = 1 WHERE id = :id")
     suspend fun markAsCloudSynced(id: Long)
 
+    @Query("UPDATE notes SET isPinned = NOT isPinned, updatedAt = :now, cloudSynced = 0 WHERE id = :id")
+    suspend fun togglePin(id: Long, now: Long = System.currentTimeMillis())
+
     @Query("SELECT * FROM notes WHERE title LIKE '%' || :query || '%' OR body LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%'")
     fun searchNotes(query: String): Flow<List<Note>>
 
