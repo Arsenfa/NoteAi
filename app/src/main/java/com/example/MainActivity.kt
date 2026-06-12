@@ -1207,6 +1207,39 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                 CategoryChip("Briefing", false, onClick = { viewModel.navigateTo("briefing") })
             }
 
+            val syncError by viewModel.lastSyncError.collectAsState()
+            if (syncError != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                        .background(ErrorRed.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SyncProblem,
+                        contentDescription = null,
+                        tint = ErrorRed,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Sync failed: ${syncError}. Pull to retry.",
+                        color = ErrorRed,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = { viewModel.lastSyncError.value = null },
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = ErrorRed, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             if (notes.isEmpty()) {
