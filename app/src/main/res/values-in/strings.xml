@@ -1,0 +1,28 @@
+<resources>
+    <string name="app_name">NoteAi</string>
+    <string name="title_notes">Catatan</string>
+    <string name="greeting_morning">Selamat pagi</string>
+    <string name="greeting_afternoon">Selamat siang</string>
+    <string name="greeting_evening">Selamat malam</string>
+    <string name="no_notes">Belum ada catatan</string>
+    <string name="no_notes_hint">Ketuk + untuk menangkap pikiran pertamamu</string>
+    <string name="settings">Pengaturan</string>
+    <string name="language">Bahasa</string>
+    <string name="theme">Tema</string>
+    <string name="theme_mode_label">Terang/Gelap/Otomatis</string>
+    <string name="offline_mode">Mode offline</string>
+    <string name="log_out">Keluar</string>
+    <string name="search_hint">Cari catatan, tag, ide…</string>
+    <string name="summarize">Rangkum</string>
+    <string name="ai_tags">Tag AI</string>
+    <string name="task_checklist">Daftar tugas</string>
+    <string name="ask_ai_hint">Tanya apa saja tentang catatanmu</string>
+    <string name="suggest_summarize_week">Rangkum minggu ini</string>
+    <string name="suggest_action_today">Apa yang harus dikerjakan hari ini?</string>
+    <string name="recording">Merekam…</string>
+    <string name="save_as_note">Simpan sebagai catatan</string>
+    <string name="copy_text">Salin teks</string>
+    <string name="describe_image">Deskripsikan gambar</string>
+    <string name="something_went_wrong">Terjadi kesalahan</string>
+    <string name="try_again">Coba lagi</string>
+</resources>
