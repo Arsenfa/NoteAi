@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "notes")
 data class Note(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val noteUuid: String = java.util.UUID.randomUUID().toString(),
     val title: String,
     val body: String,
     val tags: String = "", // Comma-separated tags, e.g. "Work,Meeting"
@@ -15,5 +16,6 @@ data class Note(
     val audioDuration: String? = null,
     val voiceTranscript: String? = null,
     val imageUrl: String? = null,
-    val checklistJson: String? = null // JSON Array of items: [{"text":"Task1","checked":true}]
+    val checklistJson: String? = null, // JSON Array of items: [{"text":"Task1","checked":true}]
+    val cloudSynced: Boolean = false
 )

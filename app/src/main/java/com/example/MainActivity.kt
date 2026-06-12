@@ -662,7 +662,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                         }
                     }
                     
-                    Divider(color = BorderSubtle, modifier = Modifier.padding(vertical = 4.dp))
+                    HorizontalDivider(color = BorderSubtle, modifier = Modifier.padding(vertical = 4.dp))
                     
                     // Add another account option
                     Row(
@@ -1516,7 +1516,7 @@ fun EditorScreen(viewModel: NoteViewModel) {
                 title = { },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Go back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
                     }
                 },
                 actions = {
@@ -1848,15 +1848,35 @@ fun VoiceMemoViewBlock(duration: String) {
 // ----------------------------------------------------
 @Composable
 fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
+    val context = LocalContext.current
     val isRecording by viewModel.isRecording.collectAsState()
     val seconds by viewModel.recordingSeconds.collectAsState()
     val transcript by viewModel.liveTranscript.collectAsState()
+
+    val speechHelper = remember {
+        com.example.data.SpeechRecognitionHelper(
+            context = context,
+            onResult = { text -> viewModel.updateLiveTranscript(text) },
+            onError = { error ->
+                android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_SHORT).show()
+            },
+            onPartial = { text -> viewModel.appendPartialTranscript(text) }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { speechHelper.cancel() }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.4f))
-            .clickable { viewModel.stopDictation(); onClose() },
+            .clickable {
+                speechHelper.stop()
+                viewModel.stopDictation()
+                onClose()
+            },
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
@@ -1904,7 +1924,11 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = { viewModel.stopDictation(); onClose() }) {
+                TextButton(onClick = {
+                    speechHelper.stop()
+                    viewModel.stopDictation()
+                    onClose()
+                }) {
                     Text("Cancel", color = AccentDeep, fontWeight = FontWeight.Bold)
                 }
 
@@ -1915,9 +1939,11 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                         .background(ButterSoft, CircleShape)
                         .clickable {
                             if (isRecording) {
+                                speechHelper.stop()
                                 viewModel.stopDictation()
                             } else {
                                 viewModel.startDictation()
+                                speechHelper.start()
                             }
                         },
                     contentAlignment = Alignment.Center
@@ -1930,6 +1956,7 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                 }
 
                 TextButton(onClick = {
+                    speechHelper.stop()
                     viewModel.saveDictationAsNote()
                     onClose()
                 }) {
@@ -1960,7 +1987,7 @@ fun DailyBriefingScreen(viewModel: NoteViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Go back", tint = TextPrimary)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back", tint = TextPrimary)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Daily Briefing", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -2298,7 +2325,7 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Default.Send,
+                            imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send",
                             tint = if (inputMessage.isNotBlank()) Color.White else TextTertiary
                         )
@@ -2342,7 +2369,7 @@ fun SearchScreen(viewModel: NoteViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Go Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back")
                 }
 
                 OutlinedTextField(
@@ -2580,7 +2607,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Go Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back")
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(androidx.compose.ui.res.stringResource(id = R.string.settings), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -2777,7 +2804,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val capturedPath by viewModel.capturedImagePath.collectAsState()
     val imageOcrText by viewModel.imageOcrText.collectAsState()
@@ -2834,7 +2861,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Go back", tint = TextPrimary)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back", tint = TextPrimary)
                 }
                 Text("AI Scanner", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 IconButton(onClick = {

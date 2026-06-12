@@ -9,6 +9,12 @@ class NoteRepository(private val noteDao: NoteDao) {
 
     suspend fun getNoteByIdSync(id: Long): Note? = noteDao.getNoteByIdSync(id)
 
+    suspend fun getNoteByUuid(uuid: String): Note? = noteDao.getNoteByUuid(uuid)
+
+    suspend fun getUnsyncedNotes(): List<Note> = noteDao.getUnsyncedNotes()
+
+    suspend fun markAsCloudSynced(id: Long) = noteDao.markAsCloudSynced(id)
+
     fun searchNotes(query: String): Flow<List<Note>> = noteDao.searchNotes(query)
 
     suspend fun insertNote(note: Note): Long = noteDao.insertNote(note)

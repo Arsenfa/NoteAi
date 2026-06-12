@@ -14,6 +14,15 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE id = :id LIMIT 1")
     suspend fun getNoteByIdSync(id: Long): Note?
 
+    @Query("SELECT * FROM notes WHERE noteUuid = :uuid LIMIT 1")
+    suspend fun getNoteByUuid(uuid: String): Note?
+
+    @Query("SELECT * FROM notes WHERE cloudSynced = 0")
+    suspend fun getUnsyncedNotes(): List<Note>
+
+    @Query("UPDATE notes SET cloudSynced = 1 WHERE id = :id")
+    suspend fun markAsCloudSynced(id: Long)
+
     @Query("SELECT * FROM notes WHERE title LIKE '%' || :query || '%' OR body LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%'")
     fun searchNotes(query: String): Flow<List<Note>>
 

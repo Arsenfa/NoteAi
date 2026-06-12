@@ -15,6 +15,7 @@ import com.example.data.GeminiService
 import com.example.data.Note
 import com.example.data.NoteRepository
 import com.example.data.AIRepository
+import com.example.data.NoteSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -29,6 +30,10 @@ import java.util.*
 val Context.dataStore by preferencesDataStore(name = "settings")
 
 class NoteViewModel(private val repository: NoteRepository, private val context: Context) : ViewModel() {
+
+    private val syncManager = NoteSyncManager(repository)
+    val isSyncing = MutableStateFlow(false)
+    val lastSyncError = MutableStateFlow<String?>(null)
 
     companion object {
         val OFFLINE_MODE_KEY = booleanPreferencesKey("offline_mode")
@@ -136,6 +141,9 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                 }
             }
         }
+
+        // Initial cloud sync on startup
+        triggerSync()
     }
 
     private var isSeeding = false
@@ -290,6 +298,21 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         currentScreen.value = screen
     }
 
+    fun triggerSync() {
+        if (isOfflineMode.value) return
+        viewModelScope.launch {
+            isSyncing.value = true
+            lastSyncError.value = null
+            syncManager.syncNotes().fold(
+                onSuccess = { isSyncing.value = false },
+                onFailure = {
+                    lastSyncError.value = it.message
+                    isSyncing.value = false
+                }
+            )
+        }
+    }
+
     // CRUD Note operations
     fun createEmptyNote() {
         viewModelScope.launch {
@@ -303,6 +326,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             val newId = repository.insertNote(emptyNote)
             selectActiveNote(newId)
         }
+        triggerSync()
     }
 
     fun updateActiveNote(title: String, body: String, tags: String, checklistJson: String? = null) {
@@ -314,10 +338,12 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                 body = body,
                 tags = tags,
                 checklistJson = checklistJson,
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                cloudSynced = false
             )
             repository.insertNote(updated)
         }
+        triggerSync()
     }
 
     fun deleteActiveNote() {
@@ -327,6 +353,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             selectActiveNote(null)
             navigateTo("home_list")
         }
+        triggerSync()
     }
 
     // Checklist toggles
@@ -466,30 +493,36 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
 
     // Voice Dictator dictation
     private var voiceTimerJob: kotlinx.coroutines.Job? = null
+    private val dictationBuffer = StringBuilder()
+
     fun startDictation() {
         isRecording.value = true
         recordingSeconds.value = 0
-        liveTranscript.value = "Listening..."
+        liveTranscript.value = ""
+        dictationBuffer.clear()
         voiceTimerJob = viewModelScope.launch(Dispatchers.Default) {
-            val phrases = listOf(
-                "The research into neural linguistic patterns suggests",
-                "that we capture thoughts more authentically through spoken word",
-                "than typing.",
-                "This project explores that boundary.",
-                "Neural linguistic patterns are particularly interesting",
-                "when we observe how human processes become structured in speech."
-            )
-            var index = 0
             while (isRecording.value) {
                 delay(1000)
                 recordingSeconds.value += 1
-                if (recordingSeconds.value % 3 == 0 && index < phrases.size) {
-                    withContext(Dispatchers.Main) {
-                        liveTranscript.value += " " + phrases[index]
-                    }
-                    index++
-                }
             }
+        }
+    }
+
+    fun updateLiveTranscript(text: String) {
+        if (text.isNotEmpty()) {
+            if (dictationBuffer.isNotEmpty()) {
+                dictationBuffer.append(" ")
+            }
+            dictationBuffer.append(text)
+            liveTranscript.value = dictationBuffer.toString()
+        }
+    }
+
+    fun appendPartialTranscript(text: String) {
+        liveTranscript.value = if (dictationBuffer.isNotEmpty()) {
+            "$dictationBuffer $text"
+        } else {
+            text
         }
     }
 
@@ -501,7 +534,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
 
     fun saveDictationAsNote() {
         stopDictation()
-        val transcript = liveTranscript.value.replace("Listening...", "").trim()
+        val transcript = liveTranscript.value.trim()
         if (transcript.isBlank()) return
 
         viewModelScope.launch {
@@ -628,25 +661,16 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         }
     }
 
-    // Simulated OCR Scanning
-    fun scanWhiteboard() {
+    // Real Gemini Vision OCR Scanning
+    fun scanWhiteboard(imageBytes: ByteArray) {
         isOcrScanning.value = true
-        ocrOutput.value = "Scanning whiteboard..."
+        ocrOutput.value = "Scanning..."
         viewModelScope.launch {
-            delay(2000)
-            ocrOutput.value = """
-                Q4 Strategy:
-                1. Market Expansion
-                2. Product Launch
-                3. Team Growth
-
-                Flowchart:
-                Ideation -> Dev -> Testing -> Release
-
-                Next Steps:
-                - Finalize budget by Friday
-                - Schedule hiring interviews for Dev team
-            """.trimIndent()
+            val result = aiRepository.ocrImage(imageBytes)
+            result.fold(
+                onSuccess = { ocrOutput.value = it },
+                onFailure = { ocrOutput.value = "Scan failed: ${it.localizedMessage ?: "Unknown error"}" }
+            )
             isOcrScanning.value = false
         }
     }
