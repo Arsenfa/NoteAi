@@ -41,6 +41,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         val DATE_FORMAT_KEY = stringPreferencesKey("date_format")
         val SELECTED_MODEL_KEY = stringPreferencesKey("selected_model")
         val CURRENT_LANGUAGE_KEY = stringPreferencesKey("current_language")
+        val GEMINI_API_KEY_PREF = stringPreferencesKey("gemini_api_key")
     }
 
     // Onboarding / Navigation state
@@ -116,6 +117,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     val dateFormatting = MutableStateFlow("DD/MM/YYYY")
     val selectedModel = MutableStateFlow("Gemini 3.5 Flash")
     val currentLanguage = MutableStateFlow("Bahasa Indonesia") // "Bahasa Indonesia", "English"
+    val geminiApiKey = MutableStateFlow("")
 
     init {
         // Load settings from Jetpack DataStore Preferences on initialization
@@ -126,6 +128,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                 dateFormatting.value = preferences[DATE_FORMAT_KEY] ?: "DD/MM/YYYY"
                 selectedModel.value = preferences[SELECTED_MODEL_KEY] ?: "Gemini 3.5 Flash"
                 currentLanguage.value = preferences[CURRENT_LANGUAGE_KEY] ?: "Bahasa Indonesia"
+                geminiApiKey.value = preferences[GEMINI_API_KEY_PREF] ?: ""
             }
         }
 
@@ -200,6 +203,15 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                 preferences[SELECTED_MODEL_KEY] = model
             }
             selectedModel.value = model
+        }
+    }
+
+    fun setGeminiApiKey(key: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[GEMINI_API_KEY_PREF] = key
+            }
+            geminiApiKey.value = key
         }
     }
 
@@ -401,7 +413,8 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             val systemInstruction = "Identify yourself simply as NoteAi of Quiet Intelligence. Keep answers clean, conversational, simple and structured using bullets or concise statements."
             val aiResponse = GeminiService.generateContent(
                 prompt = "$contextPrompt\n\nUser Question: $userMessage",
-                systemInstruction = systemInstruction
+                systemInstruction = systemInstruction,
+                apiKey = geminiApiKey.value.ifEmpty { null }
             )
 
             val updatedHistory = chatHistory.value.toMutableList()
@@ -416,7 +429,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         isAiThinking.value = true
         viewModelScope.launch {
             val prompt = "Summarize this note in 2-3 extremely clear bullet points, pointing out final decisions:\nNote title: ${active.title}\nNote body: ${active.body}"
-            val response = GeminiService.generateContent(prompt)
+            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
 
             val currentHistory = chatHistory.value.toMutableList()
             currentHistory.add(ChatMessage(sender = "user", content = "Summarize this note"))
@@ -432,7 +445,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         isAiThinking.value = true
         viewModelScope.launch {
             val prompt = "Extract actionable items / to-do elements from this note. Format purely as a JSON Array of JSON Objects like: [{\"text\":\"Action item text\",\"checked\":false}] without any markdown wrapping (just raw payload)."
-            val response = GeminiService.generateContent(prompt)
+            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
             try {
                 // Parse checklist from generated content
                 val cleanResponse = response.replace("```json", "").replace("```", "").trim()
@@ -449,7 +462,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             } catch (e: Exception) {
                 // Return simple checklist if JSON fails
                 val listPrompt = "List extracted tasks from this note as simple checklist lines, numbered."
-                val textResponse = GeminiService.generateContent(listPrompt)
+                val textResponse = GeminiService.generateContent(listPrompt, apiKey = geminiApiKey.value.ifEmpty { null })
                 val currentHistory = chatHistory.value.toMutableList()
                 currentHistory.add(ChatMessage(sender = "ai", content = "Here are the extracted items:\n\n$textResponse"))
                 chatHistory.value = currentHistory
@@ -462,7 +475,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         val active = activeNote.value ?: return
         viewModelScope.launch {
             val prompt = "Suggest exactly 3 lowercase, short single-word tags for this note content as a comma-separated list, e.g. 'ideas,cooking,travel'. Note content: ${active.body}"
-            val response = GeminiService.generateContent(prompt)
+            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
             val cleanTags = response.trim().replace(" ", "")
             if (cleanTags.isNotEmpty() && !cleanTags.startsWith("Error") && !cleanTags.startsWith("API")) {
                 val updated = active.copy(
@@ -479,7 +492,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         if (active.body.isBlank()) return
         viewModelScope.launch {
             val prompt = "Generate a concise title of at most 4-5 words for this note body: ${active.body}. Return only the title text itself without enclosing quotes."
-            val response = GeminiService.generateContent(prompt)
+            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
             val cleanTitle = response.trim()
             if (cleanTitle.isNotEmpty() && !cleanTitle.startsWith("Error")) {
                 val updated = active.copy(
@@ -571,7 +584,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         isVisionLoading.value = true
         
         viewModelScope.launch {
-            val ocrResult = aiRepository.ocrImage(bytes)
+            val ocrResult = aiRepository.ocrImage(bytes, apiKey = geminiApiKey.value.ifEmpty { null })
             ocrResult.fold(
                 onSuccess = {
                     imageOcrText.value = it
@@ -588,7 +601,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         isVisionLoading.value = true
         imageDescription.value = "Generating description..."
         viewModelScope.launch {
-            val result = aiRepository.describeImage(bytes)
+            val result = aiRepository.describeImage(bytes, apiKey = geminiApiKey.value.ifEmpty { null })
             result.fold(
                 onSuccess = {
                     imageDescription.value = it
@@ -605,7 +618,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         isVisionLoading.value = true
         viewModelScope.launch {
             val notesList = allNotes.value
-            val result = aiRepository.visualSearch(bytes, notesList)
+            val result = aiRepository.visualSearch(bytes, notesList, apiKey = geminiApiKey.value.ifEmpty { null })
             result.fold(
                 onSuccess = {
                     val currentHistory = chatHistory.value.toMutableList()
@@ -643,7 +656,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
 
     fun readImageTextFromUri(bytes: ByteArray, onResult: (String) -> Unit) {
         viewModelScope.launch {
-            val ocrResult = aiRepository.ocrImage(bytes)
+            val ocrResult = aiRepository.ocrImage(bytes, apiKey = geminiApiKey.value.ifEmpty { null })
             ocrResult.fold(
                 onSuccess = { onResult(it) },
                 onFailure = { onResult("Error: ${it.localizedMessage}") }
@@ -653,7 +666,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
 
     fun describeImageFromUri(bytes: ByteArray, onResult: (String) -> Unit) {
         viewModelScope.launch {
-            val descResult = aiRepository.describeImage(bytes)
+            val descResult = aiRepository.describeImage(bytes, apiKey = geminiApiKey.value.ifEmpty { null })
             descResult.fold(
                 onSuccess = { onResult(it) },
                 onFailure = { onResult("Error: ${it.localizedMessage}") }
@@ -666,7 +679,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         isOcrScanning.value = true
         ocrOutput.value = "Scanning..."
         viewModelScope.launch {
-            val result = aiRepository.ocrImage(imageBytes)
+            val result = aiRepository.ocrImage(imageBytes, apiKey = geminiApiKey.value.ifEmpty { null })
             result.fold(
                 onSuccess = { ocrOutput.value = it },
                 onFailure = { ocrOutput.value = "Scan failed: ${it.localizedMessage ?: "Unknown error"}" }

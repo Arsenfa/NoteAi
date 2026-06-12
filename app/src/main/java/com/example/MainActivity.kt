@@ -19,7 +19,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -2552,6 +2556,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
     val dateFormat by viewModel.dateFormatting.collectAsState()
     val selectedModel by viewModel.selectedModel.collectAsState()
     val currentLanguage by viewModel.currentLanguage.collectAsState()
+    val geminiApiKey by viewModel.geminiApiKey.collectAsState()
     val authState by authViewModel.authState.collectAsState()
 
     val mockEmail by authViewModel.mockUserEmail.collectAsState()
@@ -2692,6 +2697,71 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             SettingsRowClick("Model", selectedModel) {
                 viewModel.setSelectedModel("Gemini 3.5 Flash")
             }
+
+            // Gemini API Key Input
+            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                Text("Gemini API Key", fontSize = 14.sp, color = TextPrimary)
+                Spacer(modifier = Modifier.height(8.dp))
+                var apiKeyInput by remember { mutableStateOf(geminiApiKey) }
+                var showApiKey by remember { mutableStateOf(false) }
+                OutlinedTextField(
+                    value = apiKeyInput,
+                    onValueChange = { apiKeyInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Paste your Gemini API key here", fontSize = 12.sp, color = TextTertiary) },
+                    singleLine = true,
+                    visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showApiKey = !showApiKey }) {
+                            Icon(
+                                imageVector = if (showApiKey) Icons.Default.Check else Icons.Default.Info,
+                                contentDescription = "Toggle visibility",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = ButterYellow,
+                        unfocusedBorderColor = BorderSubtle
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Get free key at aistudio.google.com",
+                        fontSize = 11.sp,
+                        color = AccentDeep,
+                        textDecoration = TextDecoration.Underline
+                    )
+                    Button(
+                        onClick = {
+                            viewModel.setGeminiApiKey(apiKeyInput.trim())
+                            Toast.makeText(context, "API key saved!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ButterYellow),
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
+                        enabled = apiKeyInput.isNotBlank()
+                    ) {
+                        Text("Save", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (apiKeyInput.isNotBlank()) TextPrimary else TextTertiary)
+                    }
+                }
+                if (geminiApiKey.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Key: ...${geminiApiKey.takeLast(6)}",
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Text("Data usage", fontSize = 14.sp, color = TextPrimary)
                 Text("Your notes stay on-device unless you ask", fontSize = 11.sp, color = TextSecondary)

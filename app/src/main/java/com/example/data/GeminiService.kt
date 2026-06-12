@@ -24,15 +24,15 @@ object GeminiService {
         return BuildConfig.GEMINI_API_KEY
     }
 
-    suspend fun generateContent(prompt: String, systemInstruction: String? = null): String = withContext(Dispatchers.IO) {
-        val apiKey = getApiKey()
-        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
+    suspend fun generateContent(prompt: String, systemInstruction: String? = null, apiKey: String? = null): String = withContext(Dispatchers.IO) {
+        val key = if (!apiKey.isNullOrEmpty()) apiKey else getApiKey()
+        if (key.isEmpty() || key == "MY_GEMINI_API_KEY") {
             Log.e(TAG, "API Key is missing or placeholder!")
-            return@withContext "API Key is missing or placeholder! Please configure it in your AI Studio user secrets."
+            return@withContext "API Key belum diatur. Buka Settings untuk menambahkan Gemini API key kamu."
         }
 
         // Using prompt-friendly default recommended model (gemini-3.5-flash)
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$key"
         val mediaType = "application/json; charset=utf-8".toMediaType()
 
         try {
@@ -89,13 +89,13 @@ object GeminiService {
         }
     }
 
-    suspend fun analyzeImage(bitmapBase64: String, mimeType: String, prompt: String): String = withContext(Dispatchers.IO) {
-        val apiKey = getApiKey()
-        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext "API Key is missing or placeholder! Please configure it in your AI Studio user secrets."
+    suspend fun analyzeImage(bitmapBase64: String, mimeType: String, prompt: String, apiKey: String? = null): String = withContext(Dispatchers.IO) {
+        val key = if (!apiKey.isNullOrEmpty()) apiKey else getApiKey()
+        if (key.isEmpty() || key == "MY_GEMINI_API_KEY") {
+            return@withContext "API Key belum diatur. Buka Settings untuk menambahkan Gemini API key kamu."
         }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$key"
         val mediaType = "application/json; charset=utf-8".toMediaType()
 
         try {
