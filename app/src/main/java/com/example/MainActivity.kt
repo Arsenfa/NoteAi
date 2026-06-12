@@ -139,7 +139,7 @@ fun MainAppHost(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             "home_list" -> MainDashboard(viewModel, isGrid = false)
             "home_grid" -> MainDashboard(viewModel, isGrid = true)
             "editor" -> EditorScreen(viewModel)
-            "briefing" -> DailyBriefingScreen(viewModel)
+            "briefing" -> DailyBriefingScreen(viewModel, authViewModel)
             "search" -> SearchScreen(viewModel)
             "settings" -> SettingsScreen(viewModel, authViewModel)
             "ocr" -> WhiteboardOcrScreen(viewModel)
@@ -594,10 +594,11 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
     var generalError by remember { mutableStateOf("") }
     
     var isLocalLoading by remember { mutableStateOf(false) }
-    var showGoogleAccountPicker by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val authState by authViewModel.authState.collectAsState()
+    val googleAuthHelper = remember(context) { com.example.data.GoogleAuthHelper(context) }
+    val scope = rememberCoroutineScope()
 
     // Observe loading or error states
     LaunchedEffect(authState) {
@@ -611,100 +612,6 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             }
             else -> {}
         }
-    }
-
-    // Google Account Picker Dialog
-    if (showGoogleAccountPicker) {
-        AlertDialog(
-            onDismissRequest = { showGoogleAccountPicker = false },
-            title = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    AsyncImage(
-                        model = "https://lh3.googleusercontent.com/COxitS2COVK94UPxoZOFJW5vP-R3g52M1ON06QqfZgHocSOfR97v211xsI93bhg9KGA=s48",
-                        contentDescription = null,
-                        modifier = Modifier.size(36.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Sign in with Google", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("to continue to noteai", fontSize = 13.sp, color = TextSecondary)
-                }
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    // Main Google profile link
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                showGoogleAccountPicker = false
-                                isLocalLoading = true
-                                authViewModel.signInWithGoogle("mock_google_token", {
-                                    isLocalLoading = false
-                                    viewModel.isLoggedIn.value = true
-                                    viewModel.navigateTo("home_list")
-                                }, {
-                                    isLocalLoading = false
-                                    generalError = it
-                                })
-                            }
-                            .padding(vertical = 12.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(ButterYellow, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("A", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Alfan Januar", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                            Text("alfanjanuar50@gmail.com", fontSize = 12.sp, color = TextSecondary)
-                        }
-                    }
-                    
-                    HorizontalDivider(color = BorderSubtle, modifier = Modifier.padding(vertical = 4.dp))
-                    
-                    // Add another account option
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                showGoogleAccountPicker = false
-                                isLocalLoading = true
-                                authViewModel.signInWithGoogle("mock_google_token_new", {
-                                    isLocalLoading = false
-                                    viewModel.isLoggedIn.value = true
-                                    viewModel.navigateTo("home_list")
-                                }, {
-                                    isLocalLoading = false
-                                    generalError = it
-                                })
-                            }
-                            .padding(vertical = 12.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(24.dp).padding(4.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Use another account", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {},
-            containerColor = Color.White,
-            shape = RoundedCornerShape(24.dp)
-        )
     }
 
     Column(
@@ -1092,7 +999,28 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
         Button(
             onClick = {
                 generalError = ""
-                showGoogleAccountPicker = true
+                isLocalLoading = true
+                scope.launch {
+                    val tokenResult = googleAuthHelper.signIn().recoverCatching {
+                        googleAuthHelper.signInExistingOnly().getOrThrow()
+                    }
+                    tokenResult.fold(
+                        onSuccess = { idToken ->
+                            authViewModel.signInWithGoogle(idToken, {
+                                isLocalLoading = false
+                                viewModel.isLoggedIn.value = true
+                                viewModel.navigateTo("home_list")
+                            }, { msg ->
+                                isLocalLoading = false
+                                generalError = msg
+                            })
+                        },
+                        onFailure = { err ->
+                            isLocalLoading = false
+                            generalError = err.message ?: "Gagal login dengan Google."
+                        }
+                    )
+                }
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             shape = RoundedCornerShape(9999.dp),
@@ -2026,9 +1954,58 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
 // 9. DAILY BRIEFING SCREEN
 // ----------------------------------------------------
 @Composable
-fun DailyBriefingScreen(viewModel: NoteViewModel) {
+fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
     val notes by viewModel.allNotes.collectAsState()
-    val yesterdayNotes = remember(notes) { notes.take(3) }
+
+    // Derive greeting + user display name from Firebase Auth + time of day.
+    val user = authViewModel.currentUser
+    val userName = remember(user) {
+        user?.displayName?.substringBefore(" ")
+            ?: user?.email?.substringBefore("@")
+            ?: "there"
+    }
+    val greeting = remember {
+        when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+            in 5..11 -> "Good morning"
+            in 12..17 -> "Good afternoon"
+            else -> "Good evening"
+        }
+    }
+
+    // Recent notes edited in the last 7 days, most recent first.
+    val recentNotes = remember(notes) {
+        val sevenDaysAgo = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+        notes
+            .filter { it.updatedAt >= sevenDaysAgo && (it.title.isNotBlank() || it.body.isNotBlank()) }
+            .sortedByDescending { it.updatedAt }
+            .take(5)
+    }
+
+    // Open action items: unchecked checklist entries from any note.
+    val openActions = remember(notes) {
+        data class OpenAction(val text: String, val noteTitle: String)
+        val list = mutableListOf<OpenAction>()
+        for (note in notes) {
+            val json = note.checklistJson ?: continue
+            try {
+                val arr = JSONArray(json)
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    if (!obj.optBoolean("checked")) {
+                        val text = obj.optString("text").trim()
+                        if (text.isNotEmpty()) {
+                            list += OpenAction(
+                                text = text,
+                                noteTitle = note.title.ifBlank { "Untitled note" }
+                            )
+                        }
+                    }
+                }
+            } catch (_: Exception) { /* ignore malformed JSON */ }
+            if (list.size >= 6) break
+        }
+        list.take(6)
+    }
 
     Scaffold(
         modifier = Modifier
@@ -2057,7 +2034,7 @@ fun DailyBriefingScreen(viewModel: NoteViewModel) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
         ) {
-            Text("Good morning, Aru", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("$greeting, $userName", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Text(
                 SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()),
                 fontSize = 12.sp,
@@ -2066,23 +2043,28 @@ fun DailyBriefingScreen(viewModel: NoteViewModel) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Highlights row
-            Text("Yesterday's highlights", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            // Highlights row — recent notes edited in the last 7 days.
+            Text("Recent highlights", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Horizontally scrolls notes summary
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (yesterdayNotes.isEmpty()) {
-                    Box(modifier = Modifier.width(240.dp).height(140.dp).background(SurfaceTertiary, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                        Text("No edited notes yesterday", fontSize = 12.sp, color = TextTertiary)
+                if (recentNotes.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .width(240.dp)
+                            .height(140.dp)
+                            .background(SurfaceTertiary, RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No recent notes", fontSize = 12.sp, color = TextTertiary)
                     }
                 } else {
-                    yesterdayNotes.forEach { note ->
+                    recentNotes.forEach { note ->
                         Box(
                             modifier = Modifier
                                 .width(240.dp)
@@ -2094,14 +2076,29 @@ fun DailyBriefingScreen(viewModel: NoteViewModel) {
                         ) {
                             Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxHeight()) {
                                 Column {
-                                    val tag = note.tags.split(",").firstOrNull() ?: "work"
-                                    Box(modifier = Modifier.background(Color(0xFFE2E7E5), RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                    val tag = note.tags.split(",").firstOrNull()?.trim()?.takeIf { it.isNotBlank() } ?: "note"
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xFFE2E7E5), RoundedCornerShape(12.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
                                         Text(tag, fontSize = 9.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Text(note.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        text = note.title.ifBlank { "Untitled note" },
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
-                                Text("Edited recently", fontSize = 11.sp, color = TextSecondary)
+                                Text(
+                                    text = SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updatedAt)),
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
                             }
                         }
                     }
@@ -2110,11 +2107,10 @@ fun DailyBriefingScreen(viewModel: NoteViewModel) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Open Action items
+            // Open action items — unchecked checklist entries pulled from user notes.
             Text("Open action items", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Prepopulated checklists list card
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(16.dp),
@@ -2122,29 +2118,18 @@ fun DailyBriefingScreen(viewModel: NoteViewModel) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ActionCheckRow("Book venue for offsite", "from Q4 planning • June 11")
-                    ActionCheckRow("Call Rina about design review", "pending action item")
-                    ActionCheckRow("Send follow-up email to investors", "investor outreach")
-                    ActionCheckRow("Renew domain name — noteai.app", "billing alert")
+                    if (openActions.isEmpty()) {
+                        Text(
+                            "No open action items. Add a checklist to a note to see tasks here.",
+                            fontSize = 13.sp,
+                            color = TextTertiary
+                        )
+                    } else {
+                        openActions.forEach { action ->
+                            ActionCheckRow(action.text, action.noteTitle)
+                        }
+                    }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Today's schedule
-            Text("Today's plan", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                TodayScheduleItem("09:00", "Standup with engineering (30m)")
-                TodayScheduleItem("13:30", "Lunch with Priya")
-                TodayScheduleItem("16:00", "Design review with team")
             }
 
             Spacer(modifier = Modifier.height(64.dp))
@@ -2178,14 +2163,6 @@ fun ActionCheckRow(title: String, subtitle: String) {
             Text(title, fontSize = 15.sp, color = if (checked) TextSecondary else TextPrimary, textDecoration = if (checked) TextDecoration.LineThrough else null)
             Text(subtitle, fontSize = 11.sp, color = TextTertiary)
         }
-    }
-}
-
-@Composable
-fun TodayScheduleItem(time: String, title: String) {
-    Row(verticalAlignment = Alignment.Top) {
-        Text(time, fontSize = 12.sp, color = ButterYellow, fontWeight = FontWeight.Bold, modifier = Modifier.width(48.dp))
-        Text(title, fontSize = 14.sp, color = TextPrimary)
     }
 }
 
@@ -2610,30 +2587,21 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
     val geminiApiKey by viewModel.geminiApiKey.collectAsState()
     val authState by authViewModel.authState.collectAsState()
 
-    val mockEmail by authViewModel.mockUserEmail.collectAsState()
-
-    // Determine current user display info
-    val accountName = remember(authState, mockEmail) {
-        val user = authViewModel.currentUser
-        val email = user?.email ?: mockEmail ?: ""
+    // Derive current user display info from Firebase Auth state only.
+    val user = authViewModel.currentUser
+    val accountName = remember(user) {
+        val email = user?.email ?: ""
         if (email.isBlank()) "Guest User" else email.substringBefore("@")
     }
-    val accountEmail = remember(authState, mockEmail) {
-        val user = authViewModel.currentUser
-        val email = user?.email ?: mockEmail ?: ""
+    val accountEmail = remember(user) {
+        val email = user?.email ?: ""
         if (email.isBlank()) "Offline guest mode" else email
     }
-    val planLabel = remember(authState, mockEmail) {
-        val user = authViewModel.currentUser
-        if (user != null) {
-            val isAnon = user.isAnonymous
-            if (isAnon) "Guest plan" else "Pro plan"
-        } else {
-            if (mockEmail == "guest_user@example.com" || mockEmail.isNullOrBlank()) {
-                "Guest plan"
-            } else {
-                "Pro plan"
-            }
+    val planLabel = remember(user) {
+        when {
+            user == null -> "Guest plan"
+            user.isAnonymous -> "Guest plan"
+            else -> "Pro plan"
         }
     }
 

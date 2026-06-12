@@ -20,6 +20,14 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // Firebase Web OAuth client ID (client_type 3 from google-services.json).
+    // Used by CredentialManager's Google One Tap sign-in flow.
+    buildConfigField(
+      "String",
+      "GOOGLE_WEB_CLIENT_ID",
+      "\"808158600742-q4v5s3rjgpo8gndlgkklepf2u5nekr0v.apps.googleusercontent.com\""
+    )
   }
 
   signingConfigs {
@@ -94,12 +102,13 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
-  implementation("com.google.firebase:firebase-auth")
+  implementation(libs.firebase.auth)
   implementation(libs.firebase.crashlytics)
   implementation(libs.firebase.firestore)
   implementation(libs.play.services.auth)
   implementation(libs.credentials)
   implementation(libs.credentials.play.services.auth)
+  implementation(libs.googleid)
   // implementation(libs.firebase.ai)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)

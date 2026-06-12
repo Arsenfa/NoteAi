@@ -2,7 +2,6 @@ package com.example.viewmodel
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,26 +17,22 @@ sealed class AuthUiState {
 }
 
 class AuthViewModel(private val authRepository: AuthRepository, private val context: Context) : ViewModel() {
-    
+
     val currentUser: com.google.firebase.auth.FirebaseUser?
         get() = authRepository.currentUser
-    
+
     companion object {
         val IS_LOGGED_IN_KEY = booleanPreferencesKey("is_logged_in")
-        val MOCK_USER_EMAIL_KEY = stringPreferencesKey("mock_user_email")
     }
 
     private val _authState = MutableStateFlow<AuthUiState>(AuthUiState.Loading)
     val authState: StateFlow<AuthUiState> = _authState
 
-    val mockUserEmail = MutableStateFlow<String?>(null)
-
     init {
-        // Observe local datastore preferences for mock log in status first
+        // Observe local datastore preferences for login status first.
         viewModelScope.launch {
             context.dataStore.data.collect { preferences ->
                 val isMockLoggedIn = preferences[IS_LOGGED_IN_KEY] ?: false
-                mockUserEmail.value = preferences[MOCK_USER_EMAIL_KEY]
                 if (isMockLoggedIn) {
                     _authState.value = AuthUiState.LoggedIn
                 } else if (authRepository.isLoggedIn.value) {
@@ -73,21 +68,6 @@ class AuthViewModel(private val authRepository: AuthRepository, private val cont
         }
     }
 
-    private fun setMockUserSession(email: String?) {
-        viewModelScope.launch {
-            context.dataStore.edit { preferences ->
-                preferences[IS_LOGGED_IN_KEY] = true
-                if (email != null) {
-                    preferences[MOCK_USER_EMAIL_KEY] = email
-                } else {
-                    preferences.remove(MOCK_USER_EMAIL_KEY)
-                }
-            }
-            mockUserEmail.value = email
-            _authState.value = AuthUiState.LoggedIn
-        }
-    }
-
     fun signInAnonymously(onSuccess: () -> Unit, onError: (String) -> Unit) {
         _authState.value = AuthUiState.Loading
         viewModelScope.launch {
@@ -97,9 +77,10 @@ class AuthViewModel(private val authRepository: AuthRepository, private val cont
                     _authState.value = AuthUiState.LoggedIn
                     onSuccess()
                 },
-                onFailure = {
-                    setMockUserSession("guest_user@example.com")
-                    onSuccess()
+                onFailure = { err ->
+                    val message = err.message ?: "Gagal masuk sebagai tamu. Coba lagi."
+                    _authState.value = AuthUiState.Error(message)
+                    onError(message)
                 }
             )
         }
@@ -200,9 +181,7 @@ class AuthViewModel(private val authRepository: AuthRepository, private val cont
         viewModelScope.launch {
             context.dataStore.edit { preferences ->
                 preferences[IS_LOGGED_IN_KEY] = false
-                preferences.remove(MOCK_USER_EMAIL_KEY)
             }
-            mockUserEmail.value = null
             _authState.value = AuthUiState.LoggedOut
             onSuccess()
         }
