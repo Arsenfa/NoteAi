@@ -37,4 +37,14 @@ interface NoteDao {
 
     @Query("DELETE FROM notes WHERE id = :id")
     suspend fun deleteNoteById(id: Long)
+
+    @Query("DELETE FROM notes WHERE (TRIM(title) = '' OR title IS NULL) AND (TRIM(body) = '' OR body IS NULL)")
+    suspend fun deleteEmptyNotes()
+
+    @Transaction
+    suspend fun syncRemoteNotes(notes: List<Note>) {
+        for (note in notes) {
+            insertNote(note)
+        }
+    }
 }

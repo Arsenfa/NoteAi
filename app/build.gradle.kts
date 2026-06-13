@@ -20,14 +20,6 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-    // Firebase Web OAuth client ID (client_type 3 from google-services.json).
-    // Used by CredentialManager's Google One Tap sign-in flow.
-    buildConfigField(
-      "String",
-      "GOOGLE_WEB_CLIENT_ID",
-      "\"808158600742-q4v5s3rjgpo8gndlgkklepf2u5nekr0v.apps.googleusercontent.com\""
-    )
   }
 
   signingConfigs {
@@ -40,16 +32,17 @@ android {
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      storePassword = System.getenv("DEBUG_STORE_PASSWORD") ?: "android"
+      keyAlias = System.getenv("DEBUG_KEY_ALIAS") ?: "androiddebugkey"
+      keyPassword = System.getenv("DEBUG_KEY_PASSWORD") ?: "android"
     }
   }
 
   buildTypes {
     release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
+      isCrunchPngs = true
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }

@@ -12,6 +12,7 @@ local.properties
 .env
 *.keystore
 *.jks
+google-services.json
 *.apk
 *.aab
 app/build/

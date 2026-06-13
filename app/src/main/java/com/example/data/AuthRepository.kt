@@ -11,24 +11,24 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.EmailAuthProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-
-suspend fun <T> Task<T>.awaitTask(): T = suspendCancellableCoroutine { continuation ->
-    addOnCompleteListener { task ->
-        if (task.isSuccessful) {
-            continuation.resume(task.result)
-        } else {
-            continuation.resumeWithException(task.exception ?: Exception("Unknown error"))
-        }
-    }
-}
+import kotlinx.coroutines.tasks.await
 
 class AuthRepository {
     private val auth = FirebaseAuth.getInstance()
     private val _isLoggedIn = MutableStateFlow(auth.currentUser != null)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn
+
+    private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        _isLoggedIn.value = firebaseAuth.currentUser != null
+    }
+
+    init {
+        auth.addAuthStateListener(authStateListener)
+    }
+
+    fun clear() {
+        auth.removeAuthStateListener(authStateListener)
+    }
 
     val currentUser: FirebaseUser?
         get() = auth.currentUser
@@ -36,7 +36,7 @@ class AuthRepository {
     suspend fun signInWithGoogle(idToken: String): Result<AuthResult> {
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
-            val result = auth.signInWithCredential(credential).awaitTask()
+            val result = auth.signInWithCredential(credential).await()
             _isLoggedIn.value = true
             Result.success(result)
         } catch (e: Exception) {
@@ -46,7 +46,7 @@ class AuthRepository {
 
     suspend fun signInWithEmail(email: String, password: String): Result<AuthResult> {
         return try {
-            val result = auth.signInWithEmailAndPassword(email, password).awaitTask()
+            val result = auth.signInWithEmailAndPassword(email, password).await()
             _isLoggedIn.value = true
             Result.success(result)
         } catch (e: FirebaseAuthInvalidUserException) {
@@ -74,7 +74,7 @@ class AuthRepository {
 
     suspend fun signUpWithEmail(email: String, password: String): Result<AuthResult> {
         return try {
-            val result = auth.createUserWithEmailAndPassword(email, password).awaitTask()
+            val result = auth.createUserWithEmailAndPassword(email, password).await()
             _isLoggedIn.value = true
             Result.success(result)
         } catch (e: FirebaseAuthException) {
@@ -93,7 +93,7 @@ class AuthRepository {
 
     suspend fun signInAnonymously(): Result<AuthResult> {
         return try {
-            val result = auth.signInAnonymously().awaitTask()
+            val result = auth.signInAnonymously().await()
             _isLoggedIn.value = true
             Result.success(result)
         } catch (e: Exception) {
@@ -105,7 +105,7 @@ class AuthRepository {
         return try {
             val user = auth.currentUser ?: throw Exception("No user to link")
             val credential = EmailAuthProvider.getCredential(email, password)
-            val result = user.linkWithCredential(credential).awaitTask()
+            val result = user.linkWithCredential(credential).await()
             _isLoggedIn.value = true
             Result.success(result)
         } catch (e: Exception) {
@@ -117,7 +117,7 @@ class AuthRepository {
         return try {
             val user = auth.currentUser ?: throw Exception("No user to link")
             val credential = GoogleAuthProvider.getCredential(idToken, null)
-            val result = user.linkWithCredential(credential).awaitTask()
+            val result = user.linkWithCredential(credential).await()
             _isLoggedIn.value = true
             Result.success(result)
         } catch (e: Exception) {
@@ -128,5 +128,22 @@ class AuthRepository {
     fun signOut() {
         auth.signOut()
         _isLoggedIn.value = false
+    }
+
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return try {
+            auth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: FirebaseAuthException) {
+            val message = when (e.errorCode) {
+                "ERROR_INVALID_EMAIL" -> "Invalid email format"
+                "ERROR_USER_NOT_FOUND" -> "No account found with this email"
+                "ERROR_TOO_MANY_REQUESTS" -> "Too many requests. Try again later"
+                else -> e.message ?: "Failed to send reset email"
+            }
+            Result.failure(Exception(message))
+        } catch (e: Exception) {
+            Result.failure(Exception("Failed to send reset email: ${e.message}"))
+        }
     }
 }

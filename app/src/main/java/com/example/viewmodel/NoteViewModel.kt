@@ -105,6 +105,12 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     val chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
     val isAiThinking = MutableStateFlow(false)
 
+    private fun updateChatHistory(vararg newMessages: ChatMessage) {
+        val current = chatHistory.value.toMutableList()
+        current.addAll(newMessages)
+        chatHistory.value = current
+    }
+
     // Voice Dictator state
     val isRecording = MutableStateFlow(false)
     val recordingSeconds = MutableStateFlow(0)
@@ -148,8 +154,12 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             }
         }
 
-        // Initial cloud sync on startup
-        triggerSync()
+        // Initial cloud sync on startup (only if logged in)
+        viewModelScope.launch {
+            isLoggedIn.filter { it }.firstOrNull()?.let {
+                triggerSync()
+            }
+        }
     }
 
     private var isSeeding = false
@@ -310,11 +320,33 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     }
 
     fun navigateTo(screen: String) {
+        // Auto-cleanup: if leaving editor with an empty note, delete it
+        if (currentScreen.value == "editor" && screen != "editor") {
+            val currentId = activeNoteId.value
+            if (currentId != null) {
+                viewModelScope.launch {
+                    try {
+                        val note = repository.getNoteByIdSync(currentId)
+                        if (note != null && note.title.isBlank() && note.body.isBlank()) {
+                            repository.deleteNoteById(currentId)
+                        }
+                    } finally {
+                        currentScreen.value = screen
+                    }
+                }
+                return
+            }
+        }
         currentScreen.value = screen
     }
 
     fun triggerSync() {
         if (isOfflineMode.value) return
+        val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (firebaseUser == null || firebaseUser.isAnonymous) {
+            // Guest/anonymous users: skip sync silently, no error banner
+            return
+        }
         viewModelScope.launch {
             isSyncing.value = true
             lastSyncError.value = null
@@ -383,6 +415,12 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         }
     }
 
+    fun deleteEmptyNotes() {
+        viewModelScope.launch {
+            repository.deleteEmptyNotes()
+        }
+    }
+
     // Checklist toggles
     fun toggleChecklistItem(noteId: Long, index: Int) {
         viewModelScope.launch {
@@ -409,9 +447,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     // Gemini Integrations (Real API calls!)
     fun speakToAI(userMessage: String) {
         if (userMessage.isBlank()) return
-        val currentHistory = chatHistory.value.toMutableList()
-        currentHistory.add(ChatMessage(sender = "user", content = userMessage))
-        chatHistory.value = currentHistory
+        updateChatHistory(ChatMessage(sender = "user", content = userMessage))
 
         isAiThinking.value = true
 
@@ -432,9 +468,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                 apiKey = geminiApiKey.value.ifEmpty { null }
             )
 
-            val updatedHistory = chatHistory.value.toMutableList()
-            updatedHistory.add(ChatMessage(sender = "ai", content = aiResponse))
-            chatHistory.value = updatedHistory
+            updateChatHistory(ChatMessage(sender = "ai", content = aiResponse))
             isAiThinking.value = false
         }
     }
@@ -446,10 +480,10 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             val prompt = "Summarize this note in 2-3 extremely clear bullet points, pointing out final decisions:\nNote title: ${active.title}\nNote body: ${active.body}"
             val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
 
-            val currentHistory = chatHistory.value.toMutableList()
-            currentHistory.add(ChatMessage(sender = "user", content = "Summarize this note"))
-            currentHistory.add(ChatMessage(sender = "ai", content = response))
-            chatHistory.value = currentHistory
+            updateChatHistory(
+                ChatMessage(sender = "user", content = "Summarize this note"),
+                ChatMessage(sender = "ai", content = response)
+            )
 
             isAiThinking.value = false
         }
@@ -471,16 +505,12 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                 )
                 repository.insertNote(updatedNote)
 
-                val currentHistory = chatHistory.value.toMutableList()
-                currentHistory.add(ChatMessage(sender = "ai", content = "I've extracted ${array.length()} tasks into your checklist! Check them off in your editor."))
-                chatHistory.value = currentHistory
+                updateChatHistory(ChatMessage(sender = "ai", content = "I've extracted ${array.length()} tasks into your checklist! Check them off in your editor."))
             } catch (e: Exception) {
                 // Return simple checklist if JSON fails
                 val listPrompt = "List extracted tasks from this note as simple checklist lines, numbered."
                 val textResponse = GeminiService.generateContent(listPrompt, apiKey = geminiApiKey.value.ifEmpty { null })
-                val currentHistory = chatHistory.value.toMutableList()
-                currentHistory.add(ChatMessage(sender = "ai", content = "Here are the extracted items:\n\n$textResponse"))
-                chatHistory.value = currentHistory
+                updateChatHistory(ChatMessage(sender = "ai", content = "Here are the extracted items:\n\n$textResponse"))
             }
             isAiThinking.value = false
         }
@@ -528,7 +558,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         recordingSeconds.value = 0
         liveTranscript.value = ""
         dictationBuffer.clear()
-        voiceTimerJob = viewModelScope.launch(Dispatchers.Default) {
+        voiceTimerJob = viewModelScope.launch(Dispatchers.Main) {
             while (isRecording.value) {
                 delay(1000)
                 recordingSeconds.value += 1
@@ -636,15 +666,13 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             val result = aiRepository.visualSearch(bytes, notesList, apiKey = geminiApiKey.value.ifEmpty { null })
             result.fold(
                 onSuccess = {
-                    val currentHistory = chatHistory.value.toMutableList()
-                    currentHistory.add(ChatMessage(sender = "user", content = "Visual Search Notes"))
-                    currentHistory.add(ChatMessage(sender = "ai", content = it))
-                    chatHistory.value = currentHistory
+                    updateChatHistory(
+                        ChatMessage(sender = "user", content = "Visual Search Notes"),
+                        ChatMessage(sender = "ai", content = it)
+                    )
                 },
                 onFailure = {
-                    val currentHistory = chatHistory.value.toMutableList()
-                    currentHistory.add(ChatMessage(sender = "ai", content = "Search failed: ${it.localizedMessage}"))
-                    chatHistory.value = currentHistory
+                    updateChatHistory(ChatMessage(sender = "ai", content = "Search failed: ${it.localizedMessage}"))
                 }
             )
             isVisionLoading.value = false

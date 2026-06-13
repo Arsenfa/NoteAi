@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -20,6 +21,13 @@ object GeminiService {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    private var currentCall: Call? = null
+
+    fun cancelCurrentRequest() {
+        currentCall?.cancel()
+        currentCall = null
+    }
+
     private fun getApiKey(): String {
         return BuildConfig.GEMINI_API_KEY
     }
@@ -32,7 +40,7 @@ object GeminiService {
         }
 
         // Using prompt-friendly default recommended model (gemini-3.5-flash)
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$key"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
         val mediaType = "application/json; charset=utf-8".toMediaType()
 
         try {
@@ -60,14 +68,22 @@ object GeminiService {
             val requestBody = requestJson.toString().toRequestBody(mediaType)
             val request = Request.Builder()
                 .url(url)
+                .addHeader("x-goog-api-key", key)
                 .post(requestBody)
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            currentCall = client.newCall(request)
+            currentCall!!.execute().use { response ->
                 if (!response.isSuccessful) {
-                    val errorString = response.body?.string() ?: "Unknown error"
-                    Log.e(TAG, "Unsuccessful response: ${response.code} - $errorString")
-                    return@withContext "Error ${response.code}: $errorString"
+                    Log.e(TAG, "HTTP error: ${response.code}")
+                    val errorMessage = when (response.code) {
+                        429 -> "AI rate limit reached. Please wait a moment and try again."
+                        401 -> "Invalid Gemini API key. Please check your key in Settings."
+                        403 -> "Gemini API quota exceeded. Check your Google AI Studio usage."
+                        500, 503 -> "Gemini server error. Try again in a few seconds."
+                        else -> "AI request failed (HTTP ${response.code})"
+                    }
+                    return@withContext errorMessage
                 }
 
                 val responseBody = response.body?.string() ?: return@withContext "Empty response"
@@ -75,17 +91,30 @@ object GeminiService {
                 val candidates = responseJson.optJSONArray("candidates")
                 if (candidates != null && candidates.length() > 0) {
                     val firstCandidate = candidates.getJSONObject(0)
+
+                    // Check for safety filter blocks
+                    val finishReason = firstCandidate.optString("finishReason", "")
+                    if (finishReason == "SAFETY") {
+                        return@withContext "Response blocked by safety filter. Please try rephrasing your request."
+                    }
+
                     val content = firstCandidate.optJSONObject("content")
                     val parts = content?.optJSONArray("parts")
                     if (parts != null && parts.length() > 0) {
                         return@withContext parts.getJSONObject(0).optString("text", "No text response")
                     }
                 }
-                return@withContext "Failed to parse response: $responseBody"
+                return@withContext "Failed to parse response"
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception during call", e)
+            if (e.message?.contains("Canceled") == true) {
+                Log.i(TAG, "Request was canceled")
+            } else {
+                Log.e(TAG, "Exception during call", e)
+            }
             return@withContext "An error occurred: ${e.localizedMessage}"
+        } finally {
+            currentCall = null
         }
     }
 
@@ -95,7 +124,7 @@ object GeminiService {
             return@withContext "API Key belum diatur. Buka Settings untuk menambahkan Gemini API key kamu."
         }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$key"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
         val mediaType = "application/json; charset=utf-8".toMediaType()
 
         try {
@@ -124,13 +153,22 @@ object GeminiService {
             val requestBody = requestJson.toString().toRequestBody(mediaType)
             val request = Request.Builder()
                 .url(url)
+                .addHeader("x-goog-api-key", key)
                 .post(requestBody)
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            currentCall = client.newCall(request)
+            currentCall!!.execute().use { response ->
                 if (!response.isSuccessful) {
-                    val errorString = response.body?.string() ?: "Unknown error"
-                    return@withContext "Error ${response.code}: $errorString"
+                    Log.e(TAG, "HTTP error: ${response.code}")
+                    val errorMessage = when (response.code) {
+                        429 -> "AI rate limit reached. Please wait a moment and try again."
+                        401 -> "Invalid Gemini API key. Please check your key in Settings."
+                        403 -> "Gemini API quota exceeded. Check your Google AI Studio usage."
+                        500, 503 -> "Gemini server error. Try again in a few seconds."
+                        else -> "AI request failed (HTTP ${response.code})"
+                    }
+                    return@withContext errorMessage
                 }
 
                 val responseBody = response.body?.string() ?: return@withContext "Empty response"
@@ -138,16 +176,30 @@ object GeminiService {
                 val candidates = responseJson.optJSONArray("candidates")
                 if (candidates != null && candidates.length() > 0) {
                     val firstCandidate = candidates.getJSONObject(0)
+
+                    // Check for safety filter blocks
+                    val finishReason = firstCandidate.optString("finishReason", "")
+                    if (finishReason == "SAFETY") {
+                        return@withContext "Image analysis blocked by safety filter. The image may contain sensitive content."
+                    }
+
                     val content = firstCandidate.optJSONObject("content")
                     val parts = content?.optJSONArray("parts")
                     if (parts != null && parts.length() > 0) {
                         return@withContext parts.getJSONObject(0).optString("text", "")
                     }
                 }
-                return@withContext "Failed to parse response: $responseBody"
+                return@withContext "Failed to parse response"
             }
         } catch (e: Exception) {
+            if (e.message?.contains("Canceled") == true) {
+                Log.i(TAG, "Request was canceled")
+            } else {
+                Log.e(TAG, "Exception during image analysis", e)
+            }
             return@withContext "An error occurred: ${e.localizedMessage}"
+        } finally {
+            currentCall = null
         }
     }
 }

@@ -24,4 +24,8 @@ class NoteRepository(private val noteDao: NoteDao) {
     suspend fun deleteNote(note: Note) = noteDao.deleteNote(note)
 
     suspend fun deleteNoteById(id: Long) = noteDao.deleteNoteById(id)
+
+    suspend fun deleteEmptyNotes() = noteDao.deleteEmptyNotes()
+
+    suspend fun syncRemoteNotes(notes: List<Note>) = noteDao.syncRemoteNotes(notes)
 }

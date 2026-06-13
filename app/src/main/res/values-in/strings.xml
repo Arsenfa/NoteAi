@@ -1,17 +1,60 @@
 <resources>
     <string name="app_name">NoteAi</string>
+    <string name="brand_note">note</string>
+    <string name="brand_ai">ai</string>
+
+    <!-- Dashboard -->
     <string name="title_notes">Catatan</string>
     <string name="greeting_morning">Selamat pagi</string>
     <string name="greeting_afternoon">Selamat siang</string>
     <string name="greeting_evening">Selamat malam</string>
     <string name="no_notes">Belum ada catatan</string>
     <string name="no_notes_hint">Ketuk + untuk menangkap pikiran pertamamu</string>
+    <string name="empty_state_hint">Pikiranmu layak mendapat tempat yang indah.</string>
+    <string name="create_first_note">Buat catatan pertamamu</string>
+    <string name="untitled_note">Catatan tanpa judul</string>
+    <string name="empty_content">Konten kosong…</string>
+    <string name="filter_all">Semua</string>
+    <string name="filter_today">Hari ini</string>
+    <string name="filter_action_items">Tugas</string>
+    <string name="filter_meeting_notes">Catatan rapat</string>
+    <string name="filter_ideas">Ide</string>
+    <string name="filter_briefing">Ringkasan</string>
+    <string name="delete_empty_notes">Hapus catatan kosong</string>
+    <string name="cleared_empty_notes">Catatan kosong dihapus</string>
+    <string name="sync_failed">Sinkronisasi gagal: %1$s. Tarik untuk coba lagi.</string>
+    <string name="dismiss">Tutup</string>
+    <string name="guest_mode_banner">Mode tamu. Masuk untuk menyinkronkan catatan ke cloud.</string>
+
+    <!-- Settings -->
     <string name="settings">Pengaturan</string>
     <string name="language">Bahasa</string>
     <string name="theme">Tema</string>
     <string name="theme_mode_label">Terang/Gelap/Otomatis</string>
     <string name="offline_mode">Mode offline</string>
     <string name="log_out">Keluar</string>
+    <string name="preferences">PREFERENSI</string>
+    <string name="sync_storage">SINKRONISASI &amp; PENYIMPANAN</string>
+    <string name="ai_configurations">KONFIGURASI AI</string>
+    <string name="storage_used">Penyimpanan terpakai</string>
+    <string name="storage_value">1,2 GB dari 5 GB</string>
+    <string name="export_notes">Ekspor semua catatan</string>
+    <string name="notes_exported">Semua catatan diekspor!</string>
+    <string name="model">Model</string>
+    <string name="gemini_api_key">Gemini API Key</string>
+    <string name="api_key_placeholder">Tempel Gemini API key di sini</string>
+    <string name="get_free_key">Dapatkan key gratis di aistudio.google.com</string>
+    <string name="save">Simpan</string>
+    <string name="api_key_saved">API key disimpan!</string>
+    <string name="key_format">Key: …%1$s</string>
+    <string name="data_usage">Penggunaan data</string>
+    <string name="data_usage_hint">Catatanmu tetap di perangkat kecuali diminta</string>
+    <string name="regenerate_tags">Regenerasi tag pintar</string>
+    <string name="tags_regenerated">Tag pintar berhasil diregenerasi!</string>
+    <string name="terms_legal">Syarat · Privasi · Lisensi open-source</string>
+    <string name="date_format">Format tanggal</string>
+
+    <!-- AI -->
     <string name="search_hint">Cari catatan, tag, ide…</string>
     <string name="summarize">Rangkum</string>
     <string name="ai_tags">Tag AI</string>
@@ -25,4 +68,130 @@
     <string name="describe_image">Deskripsikan gambar</string>
     <string name="something_went_wrong">Terjadi kesalahan</string>
     <string name="try_again">Coba lagi</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_skip">Lewati</string>
+    <string name="onboarding_continue">LANJUTKAN</string>
+    <string name="onboarding_get_started">MULAI</string>
+    <string name="onboarding1_title">Tangkap apa saja</string>
+    <string name="onboarding1_subtitle">Teks, suara, foto, checklist — semua di satu tempat yang tenang.</string>
+    <string name="onboarding2_title">Diatur oleh AI</string>
+    <string name="onboarding2_subtitle">Tag dan folder pintar — tanpa kamu repot.</string>
+    <string name="onboarding3_title">Tanyakan apa saja pada catatanmu</string>
+    <string name="onboarding3_subtitle">Kolaborator tenang yang merangkum, mengekstrak tugas, dan menjawab dari perpustakaanmu.</string>
+
+    <!-- Auth / Login -->
+    <string name="auth_subtitle_sign_in">Masuk untuk menyinkronkan catatanmu</string>
+    <string name="auth_subtitle_sign_up">Daftar untuk menyinkronkan catatanmu</string>
+    <string name="label_email">Email</string>
+    <string name="label_password">Kata sandi</string>
+    <string name="label_confirm_password">Konfirmasi kata sandi</string>
+    <string name="placeholder_email">Masukkan emailmu</string>
+    <string name="forgot_password">Lupa kata sandi?</string>
+    <string name="password_reset_sent">Email reset kata sandi dikirim ke %1$s</string>
+    <string name="auth_sign_in">Masuk</string>
+    <string name="auth_sign_up">Daftar</string>
+    <string name="auth_continue_with_google">Lanjutkan dengan Google</string>
+    <string name="auth_try_guest">Coba tanpa akun</string>
+    <string name="auth_or_divider">atau</string>
+    <string name="auth_have_account">Sudah punya akun?</string>
+    <string name="auth_no_account">Belum punya akun?</string>
+    <string name="auth_sign_in_link">Masuk</string>
+    <string name="auth_sign_up_link">Daftar</string>
+    <string name="auth_legal">Dengan melanjutkan, kamu menyetujui Syarat &amp; Kebijakan Privasi kami</string>
+    <string name="auth_show">Tampilkan</string>
+    <string name="auth_hide">Sembunyikan</string>
+    <string name="err_email_empty">Email tidak boleh kosong</string>
+    <string name="err_email_invalid">Format email tidak valid</string>
+    <string name="err_password_empty">Kata sandi tidak boleh kosong</string>
+    <string name="err_password_weak">Kata sandi minimal 6 karakter</string>
+    <string name="err_confirm_empty">Konfirmasi kata sandimu</string>
+    <string name="err_passwords_mismatch">Kata sandi tidak cocok</string>
+
+    <!-- Editor -->
+    <string name="edited_just_now">Diedit baru saja</string>
+    <string name="edited_minutes_ago">Diedit %1$d menit lalu</string>
+    <string name="key_decisions">Keputusan utama</string>
+    <string name="voice_dictate">Dikte suara</string>
+    <string name="add_tag_placeholder">Tambah tag…</string>
+    <string name="go_back">Kembali</string>
+    <string name="delete">Hapus</string>
+    <string name="ai_suggest_title">AI Saran Judul</string>
+
+    <!-- Briefing -->
+    <string name="daily_briefing">Ringkasan Harian</string>
+    <string name="recent_highlights">Sorotan terbaru</string>
+    <string name="open_action_items">Tugas terbuka</string>
+    <string name="no_recent_notes">Tidak ada catatan terbaru</string>
+    <string name="no_action_items">Tidak ada tugas terbuka. Tambahkan checklist ke catatan untuk melihat tugas di sini.</string>
+
+    <!-- Search -->
+    <string name="search_placeholder">Cari catatan, tugas, ide…</string>
+    <string name="recent">Terbaru</string>
+    <string name="no_results_title">Tidak ada hasil</string>
+    <string name="no_results_hint">Coba cari topik, kata, atau tag.</string>
+
+    <!-- Voice -->
+    <string name="voice_note">Catatan suara</string>
+    <string name="listening">Mendengarkan…</string>
+    <string name="cancel">Batal</string>
+    <string name="done">Selesai</string>
+
+    <!-- Chat -->
+    <string name="ask_noteai">Tanya NoteAi</string>
+    <string name="answers_from_library">JAWABAN DARI PERPUSTAKAAN</string>
+    <string name="ask_any_question">Tanyakan apa saja pada NoteAi</string>
+    <string name="ask_placeholder">Tanyakan apa saja tentang catatanmu…</string>
+    <string name="thinking_status">Quiet Intelligence sedang berpikir…</string>
+
+    <!-- OCR -->
+    <string name="ai_scanner">AI Scanner</string>
+    <string name="extracted_text">TEKS YANG DIEKSTRAK:</string>
+    <string name="scanning_placeholder">Memindai dan membaca teks…</string>
+    <string name="image_description_label">DESKRIPSI GAMBAR:</string>
+    <string name="search_related_notes">Cari Catatan Terkait</string>
+    <string name="saved_scan">Scan berhasil disimpan!</string>
+    <string name="copied_clipboard">Teks disalin ke clipboard!</string>
+    <string name="searching_related">Mencari catatan terkait…</string>
+    <string name="camera_disabled">Kamera dinonaktifkan sampai izin diberikan.</string>
+    <string name="grant_camera">Berikan izin kamera</string>
+    <string name="reset_camera">Reset kamera</string>
+
+    <!-- Sync -->
+    <string name="sync_now">Sinkronkan</string>
+    <string name="toggle_view">Ubah tampilan</string>
+    <string name="search">Cari</string>
+    <string name="more_options">Opsi lainnya</string>
+
+    <!-- Toast Messages -->
+    <string name="error_reading_image">Gagal membaca gambar: %s</string>
+    <string name="error_capturing_image">Gagal mengambil gambar: %s</string>
+    <string name="camera_capture_error">Kesalahan kamera: %s</string>
+
+    <!-- Content Descriptions -->
+    <string name="cd_google_logo">Logo Google</string>
+    <string name="cd_sync_now">Sinkronkan sekarang</string>
+    <string name="cd_toggle_view">Ubah tampilan</string>
+    <string name="cd_search">Cari</string>
+    <string name="cd_more_options">Opsi lainnya</string>
+    <string name="cd_dismiss">Tutup</string>
+    <string name="cd_go_back">Kembali</string>
+    <string name="cd_ai_suggest_title">AI Saran Judul</string>
+    <string name="cd_delete">Hapus</string>
+    <string name="cd_voice_dictate">Dikte Suara</string>
+    <string name="cd_ask_noteai">Tanya NoteAi</string>
+    <string name="cd_send">Kirim</string>
+    <string name="cd_toggle_visibility">Ubah visibilitas</string>
+    <string name="cd_reset_camera">Reset kamera</string>
+    <string name="cd_gallery">Galeri</string>
+    <string name="cd_flash_toggle">Flash</string>
+    <string name="cd_home">Beranda</string>
+    <string name="cd_add">Tambah</string>
+    <string name="cd_profile">Profil</string>
+    <string name="splash_tagline">Teman catatan bertenaga AI kamu</string>
+    <string name="smart_folders">Folder Pintar</string>
+    <string name="guest_user">Pengguna Tamu</string>
+    <string name="guest_mode_desc">Mode tamu offline</string>
+    <string name="guest_plan">Paket tamu</string>
+    <string name="pro_plan">Paket Pro</string>
 </resources>

@@ -13,7 +13,6 @@ class SpeechRecognitionHelper(
     private val context: Context,
     private val onResult: (String) -> Unit,
     private val onError: (String) -> Unit,
-    private val onReady: () -> Unit = {},
     private val onPartial: (String) -> Unit = {}
 ) : RecognitionListener {
 
@@ -43,7 +42,6 @@ class SpeechRecognitionHelper(
         }
 
         recognizer?.startListening(intent)
-        onReady()
     }
 
     fun stop() {

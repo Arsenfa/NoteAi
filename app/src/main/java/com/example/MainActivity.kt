@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +54,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -97,7 +105,7 @@ class MainActivity : ComponentActivity() {
                 }
             })
 
-            val currentTheme by noteViewModel.appTheme.collectAsState()
+            val currentTheme by noteViewModel.appTheme.collectAsStateWithLifecycle()
             val isDarkTheme = when (currentTheme) {
                 "Dark" -> true
                 "Light" -> false
@@ -113,36 +121,56 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun MainAppHost(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
-    val currentScreen by viewModel.currentScreen.collectAsState()
-    val isLoggedIn by authViewModel.isLoggedInFlow.collectAsState(initial = false)
+    val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
+    val isLoggedIn by authViewModel.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = false)
     
-    // Simple state-driven cross-fade simulator
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        when (currentScreen) {
-            "splash" -> SplashScreen(onTimeout = {
-                if (isLoggedIn) {
-                    viewModel.navigateTo("home_list")
-                } else {
-                    viewModel.navigateTo("onboarding1")
+        AnimatedContent(
+            targetState = currentScreen,
+            transitionSpec = {
+                when {
+                    targetState == "editor" -> {
+                        slideInHorizontally { it } + fadeIn() togetherWith
+                                slideOutHorizontally { -it / 3 } + fadeOut()
+                    }
+                    initialState == "editor" -> {
+                        slideInHorizontally { -it / 3 } + fadeIn() togetherWith
+                                slideOutHorizontally { it } + fadeOut()
+                    }
+                    else -> {
+                        fadeIn(tween(200)) togetherWith fadeOut(tween(200))
+                    }
                 }
-            })
-            "onboarding1" -> Onboarding1Screen(viewModel)
-            "onboarding2" -> Onboarding2Screen(viewModel)
-            "onboarding3" -> Onboarding3Screen(viewModel)
-            "login" -> LoginScreen(viewModel, authViewModel)
-            "home_list" -> MainDashboard(viewModel, isGrid = false)
-            "home_grid" -> MainDashboard(viewModel, isGrid = true)
-            "editor" -> EditorScreen(viewModel)
-            "briefing" -> DailyBriefingScreen(viewModel, authViewModel)
-            "search" -> SearchScreen(viewModel)
-            "settings" -> SettingsScreen(viewModel, authViewModel)
-            "ocr" -> WhiteboardOcrScreen(viewModel)
+            },
+            label = "screenTransition"
+        ) { screen ->
+            when (screen) {
+                "splash" -> SplashScreen(onTimeout = {
+                    if (isLoggedIn) {
+                        viewModel.navigateTo("home_list")
+                    } else {
+                        viewModel.navigateTo("onboarding1")
+                    }
+                })
+                "onboarding1" -> Onboarding1Screen(viewModel)
+                "onboarding2" -> Onboarding2Screen(viewModel)
+                "onboarding3" -> Onboarding3Screen(viewModel)
+                "login" -> LoginScreen(viewModel, authViewModel)
+                "home_list" -> MainDashboard(viewModel, isGrid = false)
+                "home_grid" -> MainDashboard(viewModel, isGrid = true)
+                "editor" -> EditorScreen(viewModel)
+                "briefing" -> DailyBriefingScreen(viewModel, authViewModel)
+                "search" -> SearchScreen(viewModel)
+                "settings" -> SettingsScreen(viewModel, authViewModel)
+                "ocr" -> WhiteboardOcrScreen(viewModel)
+            }
         }
     }
 }
@@ -160,19 +188,19 @@ fun SplashScreen(onTimeout: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White),
+            .background(SurfacePrimary),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "note",
+                    text = stringResource(R.string.brand_note),
                     fontSize = 48.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 Text(
-                    text = "ai",
+                    text = stringResource(R.string.brand_ai),
                     fontSize = 48.sp,
                     fontWeight = FontWeight.Bold,
                     color = ButterYellow
@@ -180,7 +208,7 @@ fun SplashScreen(onTimeout: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Think in notes.",
+                text = stringResource(R.string.splash_tagline),
                 fontSize = 14.sp,
                 color = TextSecondary,
                 fontWeight = FontWeight.Normal
@@ -197,7 +225,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(SurfacePrimary)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(24.dp),
@@ -208,7 +236,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
             horizontalArrangement = Arrangement.End
         ) {
             TextButton(onClick = { viewModel.navigateTo("login") }) {
-                Text("Skip", color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.onboarding_skip), color = TextPrimary, fontWeight = FontWeight.Medium)
             }
         }
 
@@ -219,9 +247,9 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
             modifier = Modifier
                 .width(240.dp)
                 .height(380.dp)
-                .border(6.dp, Color(0xFF1A1A1A), RoundedCornerShape(24.dp))
+                .border(6.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xFFF9F9F8))
+                .background(SurfaceTertiary)
                 .padding(16.dp)
         ) {
             Column {
@@ -240,7 +268,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
 
                 // Inset Note
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(2.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -261,9 +289,9 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
                             Text("WORK", fontSize = 9.sp, color = AccentDeep, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Color(0xFFEDEDED), CircleShape))
+                        Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
                         Spacer(modifier = Modifier.height(4.dp))
-                        Box(modifier = Modifier.fillMaxWidth(0.7f).height(4.dp).background(Color(0xFFEDEDED), CircleShape))
+                        Box(modifier = Modifier.fillMaxWidth(0.7f).height(4.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
 
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -273,7 +301,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
                                     .background(ButterYellow, RoundedCornerShape(4.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Check, null, modifier = Modifier.size(10.dp), tint = Color.White)
+                                Icon(Icons.Default.Check, null, modifier = Modifier.size(10.dp), tint = MaterialTheme.colorScheme.onPrimary)
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Send follow-up email", fontSize = 10.sp, color = TextPrimary)
@@ -286,12 +314,12 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
                 // Suggestion chip inside frame
                 Box(
                     modifier = Modifier
-                        .border(1.dp, Color(0x338B5CF6), RoundedCornerShape(20.dp))
-                        .background(Color(0xFFF0F4FF))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
+                        .background(ButterSoft)
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("✨ Summarize discussion", fontSize = 10.sp, color = Color(0xFF8B5CF6), fontWeight = FontWeight.Bold)
+                        Text("✨ Summarize discussion", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -299,10 +327,10 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
 
         Spacer(modifier = Modifier.weight(0.5f))
 
-        Text("Capture anything", style = MaterialTheme.typography.displayMedium, color = TextPrimary)
+        Text(stringResource(R.string.onboarding1_title), style = MaterialTheme.typography.displayMedium, color = TextPrimary)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Text, voice, photos, checklists — all in one calm place.",
+            stringResource(R.string.onboarding1_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = TextSecondary,
             textAlign = TextAlign.Center,
@@ -314,8 +342,8 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
         // Pager Indicators
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(modifier = Modifier.size(8.dp).background(ButterYellow, CircleShape))
-            Box(modifier = Modifier.size(8.dp).background(Color(0xFFE2E2D9), CircleShape))
-            Box(modifier = Modifier.size(8.dp).background(Color(0xFFE2E2D9), CircleShape))
+            Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
+            Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -326,7 +354,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
             modifier = Modifier.fillMaxWidth().height(48.dp),
             contentPadding = PaddingValues(0.dp)
         ) {
-            Text("CONTINUE", color = TextPrimary, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_continue), color = TextPrimary, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -339,7 +367,7 @@ fun Onboarding2Screen(viewModel: NoteViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(SurfacePrimary)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(24.dp),
@@ -350,7 +378,7 @@ fun Onboarding2Screen(viewModel: NoteViewModel) {
             horizontalArrangement = Arrangement.End
         ) {
             TextButton(onClick = { viewModel.navigateTo("login") }) {
-                Text("Skip", color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.onboarding_skip), color = TextPrimary, fontWeight = FontWeight.Medium)
             }
         }
 
@@ -361,9 +389,9 @@ fun Onboarding2Screen(viewModel: NoteViewModel) {
             modifier = Modifier
                 .width(240.dp)
                 .height(380.dp)
-                .border(6.dp, Color(0xFF1A1A1A), RoundedCornerShape(24.dp))
+                .border(6.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xFFF9F9F8))
+                .background(SurfaceTertiary)
                 .padding(16.dp)
         ) {
             Column {
@@ -379,19 +407,19 @@ fun Onboarding2Screen(viewModel: NoteViewModel) {
 
                 // Scroll tokens
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(modifier = Modifier.border(1.dp, Color(0x1F000000), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                    Box(modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
                         Text("work", fontSize = 9.sp, color = TextSecondary)
                     }
-                    Box(modifier = Modifier.border(1.dp, Color(0x1F000000), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                    Box(modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
                         Text("ideas", fontSize = 9.sp, color = TextSecondary)
                     }
-                    Box(modifier = Modifier.background(Color(0xFFD0E4E2), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                        Text("meeting", fontSize = 9.sp, color = Color(0xFF0D1E1E), fontWeight = FontWeight.Bold)
+                    Box(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                        Text("meeting", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
-                Text("Smart Folders", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(stringResource(R.string.smart_folders), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Folders setup list
@@ -405,10 +433,10 @@ fun Onboarding2Screen(viewModel: NoteViewModel) {
 
         Spacer(modifier = Modifier.weight(0.5f))
 
-        Text("Organized by AI", style = MaterialTheme.typography.displayMedium, color = TextPrimary)
+        Text(stringResource(R.string.onboarding2_title), style = MaterialTheme.typography.displayMedium, color = TextPrimary)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Smart tags and folders — without you lifting a finger.",
+            stringResource(R.string.onboarding2_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = TextSecondary,
             textAlign = TextAlign.Center,
@@ -419,9 +447,9 @@ fun Onboarding2Screen(viewModel: NoteViewModel) {
 
         // Pager Indicators
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(modifier = Modifier.size(8.dp).background(Color(0xFFE2E2D9), CircleShape))
+            Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
             Box(modifier = Modifier.size(8.dp).background(ButterYellow, CircleShape))
-            Box(modifier = Modifier.size(8.dp).background(Color(0xFFE2E2D9), CircleShape))
+            Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -432,7 +460,7 @@ fun Onboarding2Screen(viewModel: NoteViewModel) {
             modifier = Modifier.fillMaxWidth().height(48.dp),
             contentPadding = PaddingValues(0.dp)
         ) {
-            Text("CONTINUE", color = TextPrimary, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_continue), color = TextPrimary, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -442,8 +470,8 @@ fun OnboardingFolderRow(title: String, active: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White, RoundedCornerShape(12.dp))
-            .border(1.dp, Color(0x1F000000), RoundedCornerShape(12.dp))
+            .background(SurfaceElevated, RoundedCornerShape(12.dp))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -452,7 +480,7 @@ fun OnboardingFolderRow(title: String, active: Boolean) {
             Box(
                 modifier = Modifier
                     .size(24.dp)
-                    .background(Color(0xFFF3EFE6), RoundedCornerShape(6.dp)),
+                    .background(SurfaceTertiary, RoundedCornerShape(6.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.Refresh, null, modifier = Modifier.size(12.dp), tint = TextSecondary)
@@ -474,7 +502,7 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(SurfacePrimary)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(24.dp),
@@ -485,7 +513,7 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
             horizontalArrangement = Arrangement.End
         ) {
             TextButton(onClick = { viewModel.navigateTo("login") }) {
-                Text("Skip", color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.onboarding_skip), color = TextPrimary, fontWeight = FontWeight.Medium)
             }
         }
 
@@ -496,9 +524,9 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
             modifier = Modifier
                 .width(240.dp)
                 .height(380.dp)
-                .border(6.dp, Color(0xFF1A1A1A), RoundedCornerShape(24.dp))
+                .border(6.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xFFF9F9F8))
+                .background(SurfaceTertiary)
                 .padding(16.dp)
         ) {
             Column {
@@ -517,8 +545,8 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .background(Color.White, RoundedCornerShape(16.dp))
-                        .border(1.dp, Color(0xFFEDEAE3), RoundedCornerShape(16.dp))
+                        .background(SurfaceElevated, RoundedCornerShape(16.dp))
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
                         .padding(8.dp)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -539,10 +567,10 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
 
         Spacer(modifier = Modifier.weight(0.5f))
 
-        Text("Ask your notes anything", style = MaterialTheme.typography.displayMedium, color = TextPrimary)
+        Text(stringResource(R.string.onboarding3_title), style = MaterialTheme.typography.displayMedium, color = TextPrimary)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "A quiet collaborator that summarizes, extracts tasks, and answers from your library.",
+            stringResource(R.string.onboarding3_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = TextSecondary,
             textAlign = TextAlign.Center,
@@ -553,8 +581,8 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
 
         // Pager Indicators
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(modifier = Modifier.size(8.dp).background(Color(0xFFE2E2D9), CircleShape))
-            Box(modifier = Modifier.size(8.dp).background(Color(0xFFE2E2D9), CircleShape))
+            Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
+            Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
             Box(modifier = Modifier.size(8.dp).background(ButterYellow, CircleShape))
         }
 
@@ -569,7 +597,7 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
             modifier = Modifier.fillMaxWidth().height(48.dp),
             contentPadding = PaddingValues(0.dp)
         ) {
-            Text("GET STARTED", color = TextPrimary, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_get_started), color = TextPrimary, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -580,23 +608,33 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
 @OptIn(com.google.accompanist.permissions.ExperimentalPermissionsApi::class)
 @Composable
 fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
-    var showConfirmPassword by remember { mutableStateOf(false) }
-    var isRegisterMode by remember { mutableStateOf(false) }
-    
+    val focusManager = LocalFocusManager.current
+
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var confirmPassword by rememberSaveable { mutableStateOf("") }
+    var showPassword by rememberSaveable { mutableStateOf(false) }
+    var showConfirmPassword by rememberSaveable { mutableStateOf(false) }
+    var isRegisterMode by rememberSaveable { mutableStateOf(false) }
+
     // Error States
-    var emailError by remember { mutableStateOf("") }
-    var passwordError by remember { mutableStateOf("") }
-    var confirmPasswordError by remember { mutableStateOf("") }
-    var generalError by remember { mutableStateOf("") }
-    
+    var emailError by rememberSaveable { mutableStateOf("") }
+    var passwordError by rememberSaveable { mutableStateOf("") }
+    var confirmPasswordError by rememberSaveable { mutableStateOf("") }
+    var generalError by rememberSaveable { mutableStateOf("") }
+
+    // Hoisted validation strings (non-composable context inside onClick lambda)
+    val errEmailEmpty = stringResource(R.string.err_email_empty)
+    val errEmailInvalid = stringResource(R.string.err_email_invalid)
+    val errPasswordEmpty = stringResource(R.string.err_password_empty)
+    val errPasswordWeak = stringResource(R.string.err_password_weak)
+    val errConfirmEmpty = stringResource(R.string.err_confirm_empty)
+    val errPasswordsMismatch = stringResource(R.string.err_passwords_mismatch)
+
     var isLocalLoading by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val authState by authViewModel.authState.collectAsState()
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
     val googleAuthHelper = remember(context) { com.example.data.GoogleAuthHelper(context) }
     val scope = rememberCoroutineScope()
 
@@ -631,14 +669,14 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "note",
+                text = stringResource(R.string.brand_note),
                 fontSize = 48.sp,
                 fontFamily = FontFamily.SansSerif,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "ai",
+                text = stringResource(R.string.brand_ai),
                 fontSize = 48.sp,
                 fontFamily = FontFamily.SansSerif,
                 fontWeight = FontWeight.SemiBold,
@@ -648,7 +686,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
 
         // 2. Subtitle Description
         Text(
-            text = if (isRegisterMode) "Sign up to sync your notes" else "Sign in to sync your notes",
+            text = if (isRegisterMode) stringResource(R.string.auth_subtitle_sign_up) else stringResource(R.string.auth_subtitle_sign_in),
             fontSize = 14.sp,
             fontFamily = FontFamily.SansSerif,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -679,7 +717,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
         // 3. Email TextField
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "Email",
+                text = stringResource(R.string.label_email),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = FontFamily.SansSerif,
@@ -693,7 +731,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                     generalError = ""
                 },
                 placeholder = {
-                    Text("Enter your email", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontSize = 15.sp)
+                    Text(stringResource(R.string.placeholder_email), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontSize = 15.sp)
                 },
                 textStyle = TextStyle(
                     color = MaterialTheme.colorScheme.onBackground,
@@ -739,7 +777,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
         // 4. Password TextField
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "Password",
+                text = stringResource(R.string.label_password),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = FontFamily.SansSerif,
@@ -786,7 +824,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 ),
                 trailingIcon = {
                     Text(
-                        text = if (showPassword) "Hide" else "Show",
+                        text = if (showPassword) stringResource(R.string.auth_hide) else stringResource(R.string.auth_show),
                         color = AccentDeep,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
@@ -812,7 +850,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
         if (isRegisterMode) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Confirm Password",
+                    text = stringResource(R.string.label_confirm_password),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.SansSerif,
@@ -859,7 +897,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                     ),
                     trailingIcon = {
                         Text(
-                            text = if (showConfirmPassword) "Hide" else "Show",
+                            text = if (showConfirmPassword) stringResource(R.string.auth_hide) else stringResource(R.string.auth_show),
                             color = AccentDeep,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
@@ -883,6 +921,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
 
         // 5. "Forgot password?" link (Only on Sign In Mode)
         if (!isRegisterMode) {
+            val passwordResetSentMsg = stringResource(R.string.password_reset_sent, email)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -890,12 +929,28 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 contentAlignment = Alignment.CenterEnd
             ) {
                 Text(
-                    text = "Forgot password?",
+                    text = stringResource(R.string.forgot_password),
                     color = AccentDeep,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable {
-                        Toast.makeText(context, "Password reset email sent (simulation)", Toast.LENGTH_SHORT).show()
+                        if (email.isBlank()) {
+                            Toast.makeText(context, errEmailEmpty, Toast.LENGTH_SHORT).show()
+                        } else {
+                            authViewModel.sendPasswordResetEmail(
+                                email = email,
+                                onSuccess = {
+                                    Toast.makeText(
+                                        context,
+                                        passwordResetSentMsg,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                },
+                                onError = { errorMsg ->
+                                    Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        }
                     }
                 )
             }
@@ -910,12 +965,12 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 val isEmailValid = android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
                 val isPasswordValid = password.length >= 6
 
-                emailError = if (email.isBlank()) "Email cannot be empty" else if (!isEmailValid) "Invalid email format" else ""
-                passwordError = if (password.isBlank()) "Password cannot be empty" else if (!isPasswordValid) "Password must be at least 6 characters" else ""
+                emailError = if (email.isBlank()) errEmailEmpty else if (!isEmailValid) errEmailInvalid else ""
+                passwordError = if (password.isBlank()) errPasswordEmpty else if (!isPasswordValid) errPasswordWeak else ""
 
                 if (isRegisterMode) {
                     val passwordsMatch = password == confirmPassword
-                    confirmPasswordError = if (confirmPassword.isBlank()) "Please confirm your password" else if (!passwordsMatch) "Passwords do not match" else ""
+                    confirmPasswordError = if (confirmPassword.isBlank()) errConfirmEmpty else if (!passwordsMatch) errPasswordsMismatch else ""
                 }
 
                 if (emailError.isNotEmpty() || passwordError.isNotEmpty() || (isRegisterMode && confirmPasswordError.isNotEmpty())) {
@@ -923,6 +978,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 }
 
                 // AuthViewModel API Submission
+                focusManager.clearFocus()
                 isLocalLoading = true
                 generalError = ""
                 if (isRegisterMode) {
@@ -954,11 +1010,11 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            if (isLocalLoading || authState is AuthUiState.Loading) {
+            if (isLocalLoading) {
                 CircularProgressIndicator(color = TextPrimary, modifier = Modifier.size(24.dp))
             } else {
                 Text(
-                    text = if (isRegisterMode) "Sign Up" else "Sign In",
+                    text = if (isRegisterMode) stringResource(R.string.auth_sign_up) else stringResource(R.string.auth_sign_in),
                     color = TextPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
@@ -982,7 +1038,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                     .background(BorderSubtle)
             )
             Text(
-                text = "or",
+                text = stringResource(R.string.auth_or_divider),
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -998,6 +1054,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
         // 8. "Continue with Google" Button
         Button(
             onClick = {
+                focusManager.clearFocus()
                 generalError = ""
                 isLocalLoading = true
                 scope.launch {
@@ -1036,12 +1093,12 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             ) {
                 AsyncImage(
                     model = "https://lh3.googleusercontent.com/COxitS2COVK94UPxoZOFJW5vP-R3g52M1ON06QqfZgHocSOfR97v211xsI93bhg9KGA=s48",
-                    contentDescription = "Google Logo",
+                    contentDescription = stringResource(R.string.cd_google_logo),
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "Continue with Google",
+                    text = stringResource(R.string.auth_continue_with_google),
                     color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
@@ -1056,6 +1113,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             modifier = Modifier
                 .padding(bottom = 32.dp)
                 .clickable {
+                    focusManager.clearFocus()
                     generalError = ""
                     isLocalLoading = true
                     authViewModel.signInAnonymously({
@@ -1069,7 +1127,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 }
         ) {
             Text(
-                text = "Try without an account",
+                text = stringResource(R.string.auth_try_guest),
                 color = AccentDeep,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium
@@ -1084,12 +1142,12 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = if (isRegisterMode) "Already have an account? " else "Don't have an account? ",
+                text = if (isRegisterMode) "${stringResource(R.string.auth_have_account)} " else "${stringResource(R.string.auth_no_account)} ",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = if (isRegisterMode) "Sign in" else "Sign up",
+                text = if (isRegisterMode) stringResource(R.string.auth_sign_in_link) else stringResource(R.string.auth_sign_up_link),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = AccentDeep,
@@ -1105,7 +1163,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
 
         // 11. Legal text
         Text(
-            text = "By continuing, you agree to our Terms & Privacy Policy",
+            text = stringResource(R.string.auth_legal),
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             textAlign = TextAlign.Center,
@@ -1119,8 +1177,8 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
 // ----------------------------------------------------
 @Composable
 fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
-    val notes by viewModel.filteredNotes.collectAsState()
-    val filterChip by viewModel.filterChip.collectAsState()
+    val notes by viewModel.filteredNotes.collectAsStateWithLifecycle()
+    val filterChip by viewModel.filterChip.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Scaffold(
@@ -1137,7 +1195,7 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(SurfacePrimary)
                 .statusBarsPadding()
                 .padding(bottom = innerPadding.calculateBottomPadding())
         ) {
@@ -1150,12 +1208,13 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                 verticalAlignment = Alignment.Bottom
             ) {
                 Column {
-                    Text("Good morning", fontSize = 14.sp, color = TextSecondary)
-                    Text("Notes", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text(stringResource(R.string.greeting_morning), fontSize = 14.sp, color = TextSecondary)
+                    Text(stringResource(R.string.title_notes), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val syncing by viewModel.isSyncing.collectAsState()
+                    val syncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+                    val syncError by viewModel.lastSyncError.collectAsStateWithLifecycle()
                     val infiniteTransition = rememberInfiniteTransition(label = "syncSpin")
                     val syncRotation by infiniteTransition.animateFloat(
                         initialValue = 0f,
@@ -1163,14 +1222,19 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                         animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
                         label = "syncRotation"
                     )
+                    val syncIconTint = when {
+                        syncing -> AccentDeep
+                        syncError != null -> ErrorRed
+                        else -> TextPrimary
+                    }
                     IconButton(
                         onClick = { if (!syncing) viewModel.triggerSync() },
                         enabled = !syncing
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Sync,
-                            contentDescription = "Sync now",
-                            tint = if (syncing) AccentDeep else TextPrimary,
+                            imageVector = if (syncError != null && !syncing) Icons.Default.SyncProblem else Icons.Default.Sync,
+                            contentDescription = stringResource(R.string.cd_sync_now),
+                            tint = syncIconTint,
                             modifier = if (syncing) Modifier.graphicsLayer { rotationZ = syncRotation } else Modifier
                         )
                     }
@@ -1180,13 +1244,37 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                         viewModel.navigateTo(if (nextGrid) "home_grid" else "home_list")
                     }) {
                         Icon(
-                            imageVector = if (isGrid) Icons.Default.Info else Icons.Default.Refresh, // simulated grid/list icon
-                            contentDescription = "Toggle View",
+                            imageVector = if (isGrid) Icons.Default.ViewList else Icons.Default.GridView,
+                            contentDescription = stringResource(R.string.cd_toggle_view),
                             tint = if (isGrid) ButterYellow else TextPrimary
                         )
                     }
                     IconButton(onClick = { viewModel.navigateTo("search") }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search", tint = TextPrimary)
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search), tint = TextPrimary)
+                    }
+                    var showMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = TextPrimary)
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                            modifier = Modifier.background(SurfaceElevated)
+                        ) {
+                            val clearedEmptyNotesMsg = stringResource(R.string.cleared_empty_notes)
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.delete_empty_notes), color = TextPrimary) },
+                                onClick = {
+                                    viewModel.deleteEmptyNotes()
+                                    showMenu = false
+                                    Toast.makeText(context, clearedEmptyNotesMsg, Toast.LENGTH_SHORT).show()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Delete, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -1199,15 +1287,17 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                     .padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                CategoryChip("All", filterChip == "All", onClick = { viewModel.filterChip.value = "All" })
-                CategoryChip("Today", filterChip == "Today", onClick = { viewModel.filterChip.value = "Today" })
-                CategoryChip("Action items", filterChip == "Action items", onClick = { viewModel.filterChip.value = "Action items" })
-                CategoryChip("Meeting notes", filterChip == "Meeting notes", onClick = { viewModel.filterChip.value = "Meeting notes" })
-                CategoryChip("Ideas", filterChip == "Ideas", onClick = { viewModel.filterChip.value = "Ideas" })
-                CategoryChip("Briefing", false, onClick = { viewModel.navigateTo("briefing") })
+                CategoryChip(stringResource(R.string.filter_all), filterChip == "All", onClick = { viewModel.filterChip.value = "All" })
+                CategoryChip(stringResource(R.string.filter_today), filterChip == "Today", onClick = { viewModel.filterChip.value = "Today" })
+                CategoryChip(stringResource(R.string.filter_action_items), filterChip == "Action items", onClick = { viewModel.filterChip.value = "Action items" })
+                CategoryChip(stringResource(R.string.filter_meeting_notes), filterChip == "Meeting notes", onClick = { viewModel.filterChip.value = "Meeting notes" })
+                CategoryChip(stringResource(R.string.filter_ideas), filterChip == "Ideas", onClick = { viewModel.filterChip.value = "Ideas" })
+                CategoryChip(stringResource(R.string.filter_briefing), false, onClick = { viewModel.navigateTo("briefing") })
             }
 
-            val syncError by viewModel.lastSyncError.collectAsState()
+            val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            val isGuest = firebaseUser == null || firebaseUser.isAnonymous
+            val syncError by viewModel.lastSyncError.collectAsStateWithLifecycle()
             if (syncError != null) {
                 Row(
                     modifier = Modifier
@@ -1224,8 +1314,9 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
+                    val syncErrorMessage = syncError ?: ""
                     Text(
-                        text = "Sync failed: ${syncError}. Pull to retry.",
+                        text = stringResource(R.string.sync_failed, syncErrorMessage),
                         color = ErrorRed,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
@@ -1235,7 +1326,38 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                         onClick = { viewModel.lastSyncError.value = null },
                         modifier = Modifier.size(20.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = ErrorRed, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_dismiss), tint = ErrorRed, modifier = Modifier.size(14.dp))
+                    }
+                }
+            } else if (isGuest) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                        .background(ButterSoft.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = AccentDeep,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.guest_mode_banner),
+                        color = AccentDeep,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = { viewModel.navigateTo("settings") },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text(stringResource(R.string.auth_sign_in), color = AccentDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1245,9 +1367,22 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
             if (notes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("No notes yet", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Touch the '+' button below to add.", fontSize = 14.sp, color = TextSecondary)
+                        Text("📝", fontSize = 48.sp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(stringResource(R.string.no_notes), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(stringResource(R.string.empty_state_hint), fontSize = 14.sp, color = TextSecondary)
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Button(
+                            onClick = { viewModel.createEmptyNote() },
+                            colors = ButtonDefaults.buttonColors(containerColor = ButterYellow),
+                            shape = RoundedCornerShape(9999.dp),
+                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.create_first_note), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
                     }
                 }
             } else if (!isGrid) {
@@ -1259,30 +1394,22 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                         .padding(horizontal = 24.dp)
                 ) {
                     items(notes, key = { it.id }) { note ->
-                        NoteListRow(note = note, onClick = { viewModel.selectActiveNote(note.id) }, viewModel = viewModel)
+                        NoteListRow(note = note, onClick = { viewModel.selectActiveNote(note.id) }, viewModel = viewModel, modifier = Modifier.animateItem())
                     }
                 }
             } else {
-                // Grid/Masonry card layout
-                Column(
+                // Grid/Masonry card layout with lazy loading
+                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp)
+                        .padding(horizontal = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Two column stack
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            notes.filterIndexed { index, _ -> index % 2 == 0 }.forEach { note ->
-                                NoteGridCard(note = note, onClick = { viewModel.selectActiveNote(note.id) }, viewModel = viewModel)
-                            }
-                        }
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            notes.filterIndexed { index, _ -> index % 2 != 0 }.forEach { note ->
-                                NoteGridCard(note = note, onClick = { viewModel.selectActiveNote(note.id) }, viewModel = viewModel)
-                            }
-                        }
+                    items(notes, key = { it.id }) { note ->
+                        NoteGridCard(note = note, onClick = { viewModel.selectActiveNote(note.id) }, viewModel = viewModel)
                     }
                 }
             }
@@ -1297,6 +1424,10 @@ fun CategoryChip(title: String, selected: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(20.dp))
             .background(if (selected) ButterSoft else SurfaceTertiary)
             .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = if (selected) "$title, selected" else title
+                role = Role.Button
+            }
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(
@@ -1309,9 +1440,9 @@ fun CategoryChip(title: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun NoteListRow(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
+fun NoteListRow(note: Note, onClick: () -> Unit, viewModel: NoteViewModel, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(vertical = 12.dp)
@@ -1354,7 +1485,7 @@ fun NoteListRow(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = if (note.body.isBlank()) "Empty content..." else note.body.replace("\n", " "),
+                text = if (note.body.isBlank()) stringResource(R.string.empty_content) else note.body.replace("\n", " "),
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = TextSecondary,
@@ -1382,7 +1513,7 @@ fun NoteListRow(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
 @Composable
 fun NoteGridCard(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = SurfaceElevated),
         shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, BorderSubtle),
         modifier = Modifier
@@ -1395,7 +1526,11 @@ fun NoteGridCard(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
         ) {
             if (note.imageUrl != null) {
                 AsyncImage(
-                    model = note.imageUrl,
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                        .data(note.imageUrl)
+                        .size(600, 400)
+                        .crossfade(true)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1411,7 +1546,7 @@ fun NoteGridCard(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = if (note.title.isBlank()) "Untitled note" else note.title,
+                    text = if (note.title.isBlank()) stringResource(R.string.untitled_note) else note.title,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
@@ -1507,9 +1642,13 @@ fun NoteGridCard(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EditorScreen(viewModel: NoteViewModel) {
-    val note by viewModel.activeNote.collectAsState()
+    val note by viewModel.activeNote.collectAsStateWithLifecycle()
     var sheetOpen by remember { mutableStateOf(false) } // Ask NoteAi Chat Sheet
     var voiceSheetOpen by remember { mutableStateOf(false) } // Voice Dictator
+
+    androidx.activity.compose.BackHandler {
+        viewModel.navigateTo("home_list")
+    }
 
     if (note == null) return
 
@@ -1532,18 +1671,18 @@ fun EditorScreen(viewModel: NoteViewModel) {
                 title = { },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.generateTitleFromContent() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "AI Suggest Title")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.ai_suggest_title))
                     }
                     IconButton(onClick = { viewModel.deleteActiveNote() }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfacePrimary)
             )
         },
         bottomBar = {
@@ -1558,7 +1697,7 @@ fun EditorScreen(viewModel: NoteViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(SurfacePrimary)
                 .padding(innerPadding)
         ) {
             Column(
@@ -1566,12 +1705,14 @@ fun EditorScreen(viewModel: NoteViewModel) {
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp)
-                    .padding(top = 40.dp, bottom = 16.dp)
+                    .padding(top = 8.dp, bottom = 16.dp)
             ) {
                 // Time updated tag
-                val formattedUpdate = remember(note?.updatedAt) {
-                    val diff = System.currentTimeMillis() - (note?.updatedAt ?: 0)
-                    if (diff < 60000) "Edited just now" else "Edited ${diff / 60000}m ago"
+                val diff = System.currentTimeMillis() - (note?.updatedAt ?: 0)
+                val formattedUpdate = if (diff < 60000) {
+                    stringResource(R.string.edited_just_now)
+                } else {
+                    stringResource(R.string.edited_minutes_ago, diff / 60000)
                 }
                 Text(formattedUpdate, fontSize = 11.sp, color = TextTertiary, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1625,10 +1766,10 @@ fun EditorScreen(viewModel: NoteViewModel) {
 
                 // Checklist Tasks Extracted Render
                 if (note?.checklistJson != null) {
-                    Text("Key decisions", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text(stringResource(R.string.key_decisions), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                     Spacer(modifier = Modifier.height(10.dp))
-                    
-                    val array = JSONArray(note?.checklistJson)
+
+                    val array = remember(note?.checklistJson) { JSONArray(note?.checklistJson) }
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         for (i in 0 until array.length()) {
                             val obj = array.getJSONObject(i)
@@ -1648,7 +1789,7 @@ fun EditorScreen(viewModel: NoteViewModel) {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (checked) {
-                                        Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp), tint = Color.White)
+                                        Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
                                     }
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -1673,7 +1814,11 @@ fun EditorScreen(viewModel: NoteViewModel) {
                 // Inline scanned image visualization
                 if (note?.imageUrl != null) {
                     AsyncImage(
-                        model = note?.imageUrl,
+                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                            .data(note?.imageUrl)
+                            .size(800, 360)
+                            .crossfade(true)
+                            .build(),
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1690,20 +1835,39 @@ fun EditorScreen(viewModel: NoteViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ActionSuggestButton(title = "AI Tags", onClick = { viewModel.autoTagActiveNote() })
-                    ActionSuggestButton(title = "Summarize", onClick = {
-                        viewModel.summarizeActiveNote()
-                        sheetOpen = true
-                    })
-                    ActionSuggestButton(title = "Task Checklist", onClick = { viewModel.extractTasksFromActiveNote() })
+                    val isAiThinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
+                    ActionSuggestButton(
+                        title = stringResource(R.string.ai_tags),
+                        icon = Icons.Default.Sell,
+                        isThinking = isAiThinking,
+                        onClick = { viewModel.autoTagActiveNote() }
+                    )
+                    ActionSuggestButton(
+                        title = stringResource(R.string.summarize),
+                        icon = Icons.Default.Description,
+                        isThinking = isAiThinking,
+                        onClick = {
+                            viewModel.summarizeActiveNote()
+                            sheetOpen = true
+                        }
+                    )
+                    ActionSuggestButton(
+                        title = stringResource(R.string.task_checklist),
+                        icon = Icons.Default.Task,
+                        isThinking = isAiThinking,
+                        onClick = { viewModel.extractTasksFromActiveNote() }
+                    )
                     IconButton(onClick = { voiceSheetOpen = true }) {
-                        Icon(Icons.Default.Person, contentDescription = "Voice Dictate", tint = ButterYellow) // represents voice dictation trigger in styling
+                        Icon(Icons.Default.Person, contentDescription = stringResource(R.string.voice_dictate), tint = ButterYellow)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Tags chips (FlowRow to enable wrapping list flow)
+                var showTagInput by remember { mutableStateOf(false) }
+                var newTagInput by remember { mutableStateOf("") }
+
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1713,58 +1877,73 @@ fun EditorScreen(viewModel: NoteViewModel) {
                         Box(
                             modifier = Modifier
                                 .background(ButterSoft, RoundedCornerShape(20.dp))
+                                .clickable {
+                                    // Remove tag on tap
+                                    val tagList = tags.split(",").map { it.trim() }.toMutableList()
+                                    tagList.remove(tag)
+                                    tags = tagList.filter { it.isNotBlank() }.joinToString(",")
+                                }
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(6.dp).background(AccentDeep, CircleShape))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(tag, fontSize = 12.sp, color = AccentDeep, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(Icons.Default.Close, null, tint = AccentDeep.copy(alpha = 0.6f), modifier = Modifier.size(12.dp))
                             }
                         }
                     }
 
-                    // Simulated manual edit tag button
-                    IconButton(onClick = {
-                        tags += if (tags.isEmpty()) "project" else ",project"
-                    }) {
-                        Icon(Icons.Default.Add, null, tint = TextTertiary, modifier = Modifier.size(16.dp))
+                    // Add tag button
+                    IconButton(onClick = { showTagInput = !showTagInput }) {
+                        Icon(
+                            if (showTagInput) Icons.Default.Close else Icons.Default.Add,
+                            null, tint = TextTertiary, modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Manual Tag Editor Text Input
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Refresh, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    BasicTextField(
-                        value = tags,
-                        onValueChange = { input ->
-                            // Limits each individual tag to 20 characters max
-                            val processed = input.split(",").joinToString(",") {
-                                if (it.length > 20) it.take(20) else it
-                            }
-                            tags = processed
-                        },
-                        textStyle = TextStyle(
-                            fontFamily = FontFamily.SansSerif,
-                            fontSize = 13.sp,
-                            color = AccentDeep,
-                            fontWeight = FontWeight.Medium
-                        ),
-                        singleLine = true,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f),
-                        decorationBox = { innerTextField ->
-                            if (tags.isEmpty()) {
-                                Text("Edit tags manually (comma separated, max 20 chars per tag)...", fontSize = 13.sp, color = TextTertiary)
-                            }
-                            innerTextField()
-                        }
-                    )
+                // Inline tag input (shown on + tap)
+                AnimatedVisibility(visible = showTagInput) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        BasicTextField(
+                            value = newTagInput,
+                            onValueChange = { if (it.length <= 20) newTagInput = it },
+                            textStyle = TextStyle(
+                                fontFamily = FontFamily.SansSerif,
+                                fontSize = 13.sp,
+                                color = AccentDeep,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            decorationBox = { innerTextField ->
+                                Box(
+                                    modifier = Modifier
+                                        .background(SurfaceTertiary, RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    if (newTagInput.isEmpty()) {
+                                        Text(stringResource(R.string.add_tag_placeholder), fontSize = 13.sp, color = TextTertiary)
+                                    }
+                                    innerTextField()
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                val trimmed = newTagInput.trim()
+                                if (trimmed.isNotEmpty()) {
+                                    tags = if (tags.isEmpty()) trimmed else "$tags,$trimmed"
+                                    newTagInput = ""
+                                    showTagInput = false
+                                }
+                            })
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(64.dp))
@@ -1779,7 +1958,7 @@ fun EditorScreen(viewModel: NoteViewModel) {
                     .size(56.dp)
                     .background(ButterYellow, CircleShape)
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Ask NoteAi", tint = Color.White) // simulated sparkles
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.ask_noteai), tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }
@@ -1795,15 +1974,47 @@ fun EditorScreen(viewModel: NoteViewModel) {
 }
 
 @Composable
-fun ActionSuggestButton(title: String, onClick: () -> Unit) {
+fun ActionSuggestButton(
+    title: String,
+    icon: ImageVector,
+    isThinking: Boolean = false,
+    onClick: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val alpha by if (isThinking) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseAlpha"
+        )
+    } else {
+        remember { mutableStateOf(1.0f) }
+    }
+
     Button(
         onClick = onClick,
-        colors = ButtonDefaults.buttonColors(containerColor = SurfaceTertiary),
+        colors = ButtonDefaults.buttonColors(containerColor = SurfaceTertiary.copy(alpha = alpha)),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.height(32.dp)
     ) {
-        Text(title, color = AccentDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = AccentDeep,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(title, color = AccentDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -1841,9 +2052,10 @@ fun VoiceMemoViewBlock(duration: String) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             val h = listOf(12, 18, 14, 24, 16, 20, 12, 22, 14, 18, 10, 20, 14)
-            h.forEach { heightVal ->
+            val randomOffsets = remember { h.map { it + (0..10).random() } }
+            h.forEachIndexed { index, heightVal ->
                 val scaleHeight = animateDpAsState(
-                    targetValue = if (isPlaying) (heightVal + (0..10).random()).dp else heightVal.dp,
+                    targetValue = if (isPlaying) randomOffsets[index].dp else heightVal.dp,
                     animationSpec = tween(300)
                 )
                 Box(
@@ -1862,12 +2074,13 @@ fun VoiceMemoViewBlock(duration: String) {
 // ----------------------------------------------------
 // 8. VOICE RECORDER BOTTOM SHEET
 // ----------------------------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
     val context = LocalContext.current
-    val isRecording by viewModel.isRecording.collectAsState()
-    val seconds by viewModel.recordingSeconds.collectAsState()
-    val transcript by viewModel.liveTranscript.collectAsState()
+    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
+    val seconds by viewModel.recordingSeconds.collectAsStateWithLifecycle()
+    val transcript by viewModel.liveTranscript.collectAsStateWithLifecycle()
 
     val speechHelper = remember {
         com.example.data.SpeechRecognitionHelper(
@@ -1884,30 +2097,24 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
         onDispose { speechHelper.cancel() }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.4f))
-            .clickable {
-                speechHelper.stop()
-                viewModel.stopDictation()
-                onClose()
-            },
-        contentAlignment = Alignment.BottomCenter
+    ModalBottomSheet(
+        onDismissRequest = {
+            speechHelper.stop()
+            viewModel.stopDictation()
+            onClose()
+        }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.65f)
-                .background(Color.White, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .clickable(enabled = false) { }
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(modifier = Modifier.width(40.dp).height(4.dp).background(BorderStrong, CircleShape))
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Voice note", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.fillMaxWidth())
+            Text(stringResource(R.string.voice_note), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.fillMaxWidth())
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -1923,7 +2130,7 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                     if (isRecording) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Listening...", fontSize = 11.sp, color = TextTertiary)
+                            Text(stringResource(R.string.listening), fontSize = 11.sp, color = TextTertiary)
                             Spacer(modifier = Modifier.width(4.dp))
                             Box(modifier = Modifier.size(4.dp).background(ButterYellow, CircleShape))
                         }
@@ -1945,7 +2152,7 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                     viewModel.stopDictation()
                     onClose()
                 }) {
-                    Text("Cancel", color = AccentDeep, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.cancel), color = AccentDeep, fontWeight = FontWeight.Bold)
                 }
 
                 // Large record button
@@ -1976,7 +2183,7 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                     viewModel.saveDictationAsNote()
                     onClose()
                 }) {
-                    Text("Done", color = AccentDeep, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.done), color = AccentDeep, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1988,7 +2195,11 @@ fun VoiceNoteDictatorOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
 // ----------------------------------------------------
 @Composable
 fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
-    val notes by viewModel.allNotes.collectAsState()
+    androidx.activity.compose.BackHandler {
+        viewModel.navigateTo("home_list")
+    }
+
+    val notes by viewModel.allNotes.collectAsStateWithLifecycle()
 
     // Derive greeting + user display name from Firebase Auth + time of day.
     val user = authViewModel.currentUser
@@ -1997,12 +2208,10 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
             ?: user?.email?.substringBefore("@")
             ?: "there"
     }
-    val greeting = remember {
-        when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-            in 5..11 -> "Good morning"
-            in 12..17 -> "Good afternoon"
-            else -> "Good evening"
-        }
+    val greetingResId = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+        in 5..11 -> R.string.greeting_morning
+        in 12..17 -> R.string.greeting_afternoon
+        else -> R.string.greeting_evening
     }
 
     // Recent notes edited in the last 7 days, most recent first.
@@ -2052,22 +2261,22 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back", tint = TextPrimary)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_go_back), tint = TextPrimary)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Daily Briefing", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(stringResource(R.string.daily_briefing), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             }
         }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(SurfacePrimary)
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
         ) {
-            Text("$greeting, $userName", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("${stringResource(greetingResId)}, $userName", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Text(
                 SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()),
                 fontSize = 12.sp,
@@ -2077,7 +2286,7 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
             Spacer(modifier = Modifier.height(32.dp))
 
             // Highlights row — recent notes edited in the last 7 days.
-            Text("Recent highlights", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(stringResource(R.string.recent_highlights), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(
@@ -2094,7 +2303,7 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
                             .background(SurfaceTertiary, RoundedCornerShape(16.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("No recent notes", fontSize = 12.sp, color = TextTertiary)
+                        Text(stringResource(R.string.no_recent_notes), fontSize = 12.sp, color = TextTertiary)
                     }
                 } else {
                     recentNotes.forEach { note ->
@@ -2102,7 +2311,7 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
                             modifier = Modifier
                                 .width(240.dp)
                                 .height(140.dp)
-                                .background(Color.White, RoundedCornerShape(16.dp))
+                                .background(SurfaceElevated, RoundedCornerShape(16.dp))
                                 .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
                                 .clickable { viewModel.selectActiveNote(note.id) }
                                 .padding(16.dp)
@@ -2112,7 +2321,7 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
                                     val tag = note.tags.split(",").firstOrNull()?.trim()?.takeIf { it.isNotBlank() } ?: "note"
                                     Box(
                                         modifier = Modifier
-                                            .background(Color(0xFFE2E7E5), RoundedCornerShape(12.dp))
+                                            .background(SurfaceTertiary, RoundedCornerShape(12.dp))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
                                         Text(tag, fontSize = 9.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
@@ -2141,11 +2350,11 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
             Spacer(modifier = Modifier.height(32.dp))
 
             // Open action items — unchecked checklist entries pulled from user notes.
-            Text("Open action items", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(stringResource(R.string.open_action_items), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(modifier = Modifier.height(12.dp))
 
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = SurfaceElevated),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, BorderSubtle),
                 modifier = Modifier.fillMaxWidth()
@@ -2153,7 +2362,7 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     if (openActions.isEmpty()) {
                         Text(
-                            "No open action items. Add a checklist to a note to see tasks here.",
+                            stringResource(R.string.no_action_items),
                             fontSize = 13.sp,
                             color = TextTertiary
                         )
@@ -2188,7 +2397,7 @@ fun ActionCheckRow(title: String, subtitle: String) {
             contentAlignment = Alignment.Center
         ) {
             if (checked) {
-                Icon(Icons.Default.Check, null, modifier = Modifier.size(12.dp), tint = Color.White)
+                Icon(Icons.Default.Check, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -2202,10 +2411,11 @@ fun ActionCheckRow(title: String, subtitle: String) {
 // ----------------------------------------------------
 // 10. ASK NOTEAI CHAT OVERLAY BOTTOM SHEET
 // ----------------------------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
-    val history by viewModel.chatHistory.collectAsState()
-    val thinking by viewModel.isAiThinking.collectAsState()
+    val history by viewModel.chatHistory.collectAsStateWithLifecycle()
+    val thinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
     var inputMessage by remember { mutableStateOf("") }
     var pendingMessageToSend by remember { mutableStateOf<String?>(null) }
 
@@ -2218,20 +2428,15 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.4f))
-            .clickable { onClose() },
-        contentAlignment = Alignment.BottomCenter
+    ModalBottomSheet(
+        onDismissRequest = { onClose() },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ) {
         // Chat Sheet layout container
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.75f)
-                .background(Color.White, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .clickable(enabled = false) { }
                 .padding(horizontal = 24.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -2240,8 +2445,8 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text("Ask NoteAi", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("ANSWERS FROM YOUR LIBRARY", fontSize = 10.sp, color = TextSecondary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.ask_noteai), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text(stringResource(R.string.answers_from_library), fontSize = 10.sp, color = TextSecondary, fontWeight = FontWeight.Bold)
                 }
                 IconButton(onClick = onClose) {
                     Icon(Icons.Default.Close, null, tint = TextPrimary)
@@ -2262,7 +2467,7 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                 if (history.isEmpty()) {
                     item {
                         Column(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Ask NoteAi any question", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text(stringResource(R.string.ask_any_question), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                             Spacer(modifier = Modifier.height(12.dp))
                             // Suggestion chips
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2276,7 +2481,7 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                         }
                     }
                 } else {
-                    items(history) { message ->
+                    itemsIndexed(history, key = { index, _ -> index }) { _, message ->
                         if (message.sender == "user") {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                 Box(
@@ -2318,7 +2523,7 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(6.dp).background(ButterYellow, CircleShape))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Quiet Intelligence thinking...", fontSize = 11.sp, color = TextTertiary)
+                                Text(stringResource(R.string.thinking_status), fontSize = 11.sp, color = TextTertiary)
                             }
                         }
                     }
@@ -2349,7 +2554,7 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                 OutlinedTextField(
                     value = inputMessage,
                     onValueChange = { if (!isSendingMessage) inputMessage = it },
-                    placeholder = { Text("Ask anything about your notes...", color = TextTertiary) },
+                    placeholder = { Text(stringResource(R.string.ask_placeholder), color = TextTertiary) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = ButterYellow,
                         unfocusedBorderColor = Color.Transparent,
@@ -2384,15 +2589,15 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                 ) {
                     if (isSendingMessage) {
                         CircularProgressIndicator(
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp,
                             modifier = Modifier.size(20.dp)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
-                            tint = if (inputMessage.isNotBlank()) Color.White else TextTertiary
+                            contentDescription = stringResource(R.string.cd_send),
+                            tint = if (inputMessage.isNotBlank()) MaterialTheme.colorScheme.onPrimary else TextTertiary
                         )
                     }
                 }
@@ -2418,9 +2623,13 @@ fun ChatSuggestChip(text: String, onClick: () -> Unit) {
 // ----------------------------------------------------
 @Composable
 fun SearchScreen(viewModel: NoteViewModel) {
+    androidx.activity.compose.BackHandler {
+        viewModel.navigateTo("home_list")
+    }
+
     var query by remember { mutableStateOf("") }
-    val notes by viewModel.filteredNotes.collectAsState()
-    val filterChip by viewModel.filterChip.collectAsState()
+    val notes by viewModel.filteredNotes.collectAsStateWithLifecycle()
+    val filterChip by viewModel.filterChip.collectAsStateWithLifecycle()
 
     Scaffold(
         modifier = Modifier
@@ -2434,7 +2643,7 @@ fun SearchScreen(viewModel: NoteViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_go_back))
                 }
 
                 OutlinedTextField(
@@ -2443,7 +2652,7 @@ fun SearchScreen(viewModel: NoteViewModel) {
                         query = it
                         viewModel.searchQuery.value = it
                     },
-                    placeholder = { Text("Search notes, tasks, ideas...", color = TextTertiary) },
+                    placeholder = { Text(stringResource(R.string.search_placeholder), color = TextTertiary) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = ButterYellow,
                         unfocusedBorderColor = Color.Transparent,
@@ -2473,7 +2682,7 @@ fun SearchScreen(viewModel: NoteViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(SurfacePrimary)
                 .padding(innerPadding)
         ) {
             // Category scroll filters
@@ -2495,12 +2704,12 @@ fun SearchScreen(viewModel: NoteViewModel) {
             if (notes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("No matching results", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text("Try searching for topics, words, or tags.", fontSize = 12.sp, color = TextSecondary)
+                        Text(stringResource(R.string.no_results_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(stringResource(R.string.no_results_hint), fontSize = 12.sp, color = TextSecondary)
                     }
                 }
             } else {
-                Text("Recent", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp))
+                Text(stringResource(R.string.recent), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp))
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -2551,7 +2760,7 @@ fun SegmentedThemeSelector(
         options.forEach { option ->
             val isSelected = selectedTheme == option
             val backgroundColor = if (isSelected) ButterYellow else Color.Transparent
-            val textColor = if (isSelected) Color.White else TextSecondary
+            val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else TextSecondary
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -2589,7 +2798,7 @@ fun SegmentedLanguageSelector(
         options.forEach { option ->
             val isSelected = selectedLanguage == option
             val backgroundColor = if (isSelected) ButterYellow else Color.Transparent
-            val textColor = if (isSelected) Color.White else TextSecondary
+            val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else TextSecondary
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -2611,32 +2820,37 @@ fun SegmentedLanguageSelector(
 
 @Composable
 fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
+    androidx.activity.compose.BackHandler {
+        viewModel.navigateTo("home_list")
+    }
+
     val context = LocalContext.current
-    val isOffline by viewModel.isOfflineMode.collectAsState()
-    val appTheme by viewModel.appTheme.collectAsState()
-    val dateFormat by viewModel.dateFormatting.collectAsState()
-    val selectedModel by viewModel.selectedModel.collectAsState()
-    val currentLanguage by viewModel.currentLanguage.collectAsState()
-    val geminiApiKey by viewModel.geminiApiKey.collectAsState()
-    val authState by authViewModel.authState.collectAsState()
+    val isOffline by viewModel.isOfflineMode.collectAsStateWithLifecycle()
+    val appTheme by viewModel.appTheme.collectAsStateWithLifecycle()
+    val dateFormat by viewModel.dateFormatting.collectAsStateWithLifecycle()
+    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+    val currentLanguage by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val geminiApiKey by viewModel.geminiApiKey.collectAsStateWithLifecycle()
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
 
     // Derive current user display info from Firebase Auth state only.
     val user = authViewModel.currentUser
     val accountName = remember(user) {
         val email = user?.email ?: ""
-        if (email.isBlank()) "Guest User" else email.substringBefore("@")
-    }
+        if (email.isBlank()) null else email.substringBefore("@")
+    } ?: stringResource(R.string.guest_user)
     val accountEmail = remember(user) {
         val email = user?.email ?: ""
-        if (email.isBlank()) "Offline guest mode" else email
-    }
+        if (email.isBlank()) null else email
+    } ?: stringResource(R.string.guest_mode_desc)
     val planLabel = remember(user) {
         when {
-            user == null -> "Guest plan"
-            user.isAnonymous -> "Guest plan"
-            else -> "Pro plan"
+            user == null -> false
+            user.isAnonymous -> false
+            else -> true
         }
     }
+    val planText = if (planLabel) stringResource(R.string.pro_plan) else stringResource(R.string.guest_plan)
 
     Scaffold(
         modifier = Modifier
@@ -2654,7 +2868,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(SurfacePrimary)
                 .padding(bottom = innerPadding.calculateBottomPadding())
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
@@ -2664,7 +2878,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_go_back))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(androidx.compose.ui.res.stringResource(id = R.string.settings), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -2674,7 +2888,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFFAF8F3), RoundedCornerShape(16.dp))
+                    .background(SurfaceTertiary, RoundedCornerShape(16.dp))
                     .clickable { }
                     .padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -2693,7 +2907,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                         Text(accountName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(modifier = Modifier.background(ButterSoft, RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                            Text(planLabel, fontSize = 10.sp, color = AccentDeep, fontWeight = FontWeight.Bold)
+                            Text(planText, fontSize = 10.sp, color = AccentDeep, fontWeight = FontWeight.Bold)
                         }
                     }
                     Text(accountEmail, fontSize = 12.sp, color = TextSecondary)
@@ -2704,7 +2918,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // PREFERENCES
-            SettingsSectionHeader("PREFERENCES")
+            SettingsSectionHeader(stringResource(R.string.preferences))
             SettingsRowToggle(androidx.compose.ui.res.stringResource(id = R.string.offline_mode), checked = isOffline, onToggle = { viewModel.setOfflineMode(it) })
             
             Spacer(modifier = Modifier.height(12.dp))
@@ -2720,39 +2934,45 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            SettingsRowClick("Date format", dateFormat) {
+            SettingsRowClick(stringResource(R.string.date_format), dateFormat) {
                 viewModel.setDateFormat(if (dateFormat == "DD/MM/YYYY") "MM/DD/YYYY" else "DD/MM/YYYY")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // SYNC & STORAGE
-            SettingsSectionHeader("SYNC & STORAGE")
+            SettingsSectionHeader(stringResource(R.string.sync_storage))
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Storage used", fontSize = 14.sp, color = TextPrimary)
-                    Text("1.2 GB of 5 GB", fontSize = 12.sp, color = TextSecondary)
+                    Text(stringResource(R.string.storage_used), fontSize = 14.sp, color = TextPrimary)
+                    Text(stringResource(R.string.storage_value), fontSize = 12.sp, color = TextSecondary)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(Color(0xFFFAF8F3), CircleShape)) {
-                    Box(modifier = Modifier.fillMaxWidth(0.24f).height(6.dp).background(ButterYellow, CircleShape))
+                val animatedProgress by animateFloatAsState(
+                    targetValue = 0.24f,
+                    animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+                    label = "storageProgress"
+                )
+                Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(SurfaceTertiary, CircleShape)) {
+                    Box(modifier = Modifier.fillMaxWidth(animatedProgress).height(6.dp).background(ButterYellow, CircleShape))
                 }
             }
-            SettingsRowAction("Export all notes") {
-                Toast.makeText(context, "All notes exported!", Toast.LENGTH_SHORT).show()
+            val exportMsg = stringResource(R.string.notes_exported)
+            SettingsRowAction(stringResource(R.string.export_notes)) {
+                Toast.makeText(context, exportMsg, Toast.LENGTH_SHORT).show()
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // AI SETTINGS
-            SettingsSectionHeader("AI CONFIGURATIONS")
-            SettingsRowClick("Model", selectedModel) {
+            SettingsSectionHeader(stringResource(R.string.ai_configurations))
+            SettingsRowClick(stringResource(R.string.model), selectedModel) {
                 viewModel.setSelectedModel("Gemini 3.5 Flash")
             }
 
             // Gemini API Key Input
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-                Text("Gemini API Key", fontSize = 14.sp, color = TextPrimary)
+                Text(stringResource(R.string.gemini_api_key), fontSize = 14.sp, color = TextPrimary)
                 Spacer(modifier = Modifier.height(8.dp))
                 var apiKeyInput by remember { mutableStateOf(geminiApiKey) }
                 var showApiKey by remember { mutableStateOf(false) }
@@ -2760,14 +2980,14 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                     value = apiKeyInput,
                     onValueChange = { apiKeyInput = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Paste your Gemini API key here", fontSize = 12.sp, color = TextTertiary) },
+                    placeholder = { Text(stringResource(R.string.api_key_placeholder), fontSize = 12.sp, color = TextTertiary) },
                     singleLine = true,
                     visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { showApiKey = !showApiKey }) {
                             Icon(
                                 imageVector = if (showApiKey) Icons.Default.Check else Icons.Default.Info,
-                                contentDescription = "Toggle visibility",
+                                contentDescription = stringResource(R.string.cd_toggle_visibility),
                                 tint = TextSecondary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -2786,28 +3006,29 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Get free key at aistudio.google.com",
+                        stringResource(R.string.get_free_key),
                         fontSize = 11.sp,
                         color = AccentDeep,
                         textDecoration = TextDecoration.Underline
                     )
+                    val apiKeySavedMsg = stringResource(R.string.api_key_saved)
                     Button(
                         onClick = {
                             viewModel.setGeminiApiKey(apiKeyInput.trim())
-                            Toast.makeText(context, "API key saved!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, apiKeySavedMsg, Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = ButterYellow),
                         shape = RoundedCornerShape(20.dp),
                         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
                         enabled = apiKeyInput.isNotBlank()
                     ) {
-                        Text("Save", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (apiKeyInput.isNotBlank()) TextPrimary else TextTertiary)
+                        Text(stringResource(R.string.save), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (apiKeyInput.isNotBlank()) TextPrimary else TextTertiary)
                     }
                 }
                 if (geminiApiKey.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Key: ...${geminiApiKey.takeLast(6)}",
+                        stringResource(R.string.key_format, geminiApiKey.takeLast(6)),
                         fontSize = 11.sp,
                         color = TextSecondary
                     )
@@ -2815,11 +3036,12 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             }
 
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-                Text("Data usage", fontSize = 14.sp, color = TextPrimary)
-                Text("Your notes stay on-device unless you ask", fontSize = 11.sp, color = TextSecondary)
+                Text(stringResource(R.string.data_usage), fontSize = 14.sp, color = TextPrimary)
+                Text(stringResource(R.string.data_usage_hint), fontSize = 11.sp, color = TextSecondary)
             }
-            SettingsRowAction("Regenerate smart tags") {
-                Toast.makeText(context, "Smart tags successfully regenerated!", Toast.LENGTH_SHORT).show()
+            val tagsRegenMsg = stringResource(R.string.tags_regenerated)
+            SettingsRowAction(stringResource(R.string.regenerate_tags)) {
+                Toast.makeText(context, tagsRegenMsg, Toast.LENGTH_SHORT).show()
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -2832,8 +3054,8 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                         viewModel.navigateTo("login")
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Color(0xFFF0E0E0)),
+                colors = ButtonDefaults.buttonColors(containerColor = SurfaceElevated),
+                border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.2f)),
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
@@ -2842,7 +3064,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "Terms · Privacy · Open-source licenses",
+                stringResource(R.string.terms_legal),
                 fontSize = 11.sp,
                 color = TextTertiary,
                 textAlign = TextAlign.Center,
@@ -2875,7 +3097,7 @@ fun SettingsRowToggle(title: String, checked: Boolean, onToggle: (Boolean) -> Un
         Switch(
             checked = checked,
             onCheckedChange = onToggle,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = ButterYellow)
+            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.onPrimary, checkedTrackColor = ButterYellow)
         )
     }
     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(BorderSubtle))
@@ -2928,10 +3150,10 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
-    val capturedPath by viewModel.capturedImagePath.collectAsState()
-    val imageOcrText by viewModel.imageOcrText.collectAsState()
-    val imageDescription by viewModel.imageDescription.collectAsState()
-    val isVisionLoading by viewModel.isVisionLoading.collectAsState()
+    val capturedPath by viewModel.capturedImagePath.collectAsStateWithLifecycle()
+    val imageOcrText by viewModel.imageOcrText.collectAsStateWithLifecycle()
+    val imageDescription by viewModel.imageDescription.collectAsStateWithLifecycle()
+    val isVisionLoading by viewModel.isVisionLoading.collectAsStateWithLifecycle()
 
     var showCameraPreview by remember { mutableStateOf(capturedPath == null) }
     var flashOn by remember { mutableStateOf(false) }
@@ -2983,16 +3205,16 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 IconButton(onClick = { viewModel.navigateTo("home_list") }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back", tint = TextPrimary)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_go_back), tint = TextPrimary)
                 }
-                Text("AI Scanner", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(stringResource(R.string.ai_scanner), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 IconButton(onClick = {
                     showCameraPreview = true
                     viewModel.capturedImagePath.value = null
                     viewModel.imageOcrText.value = ""
                     viewModel.imageDescription.value = ""
                 }) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Reset camera", tint = TextPrimary)
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cd_reset_camera), tint = TextPrimary)
                 }
             }
         }
@@ -3048,6 +3270,10 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                 .border(2.dp, ButterYellow, RoundedCornerShape(16.dp))
                         )
 
+                        // Hoisted string templates for camera callbacks (non-composable context)
+                        val errorCapturingTemplate = stringResource(R.string.error_capturing_image)
+                        val cameraCaptureErrorTemplate = stringResource(R.string.camera_capture_error)
+
                         // Bottom visual dock for shutter triggers
                         Row(
                             modifier = Modifier
@@ -3065,7 +3291,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                     .size(52.dp)
                                     .background(Color.White.copy(alpha = 0.2f), CircleShape)
                             ) {
-                                Icon(Icons.Default.Menu, contentDescription = "Gallery", tint = Color.White)
+                                Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.cd_gallery), tint = Color.White)
                             }
 
                             // Capture Shutter Button
@@ -3095,12 +3321,12 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                                                 viewModel.processCapturedImage(bytes, photoFile.absolutePath)
                                                                 showCameraPreview = false
                                                             } catch (e: Exception) {
-                                                                Toast.makeText(context, "Error capturing: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, errorCapturingTemplate.replace("%s", e.localizedMessage ?: ""), Toast.LENGTH_SHORT).show()
                                                             }
                                                         }
                                                     }
                                                     override fun onError(exception: androidx.camera.core.ImageCaptureException) {
-                                                        Toast.makeText(context, "Camera capture error: ${exception.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                                        Toast.makeText(context, cameraCaptureErrorTemplate.replace("%s", exception.localizedMessage ?: ""), Toast.LENGTH_SHORT).show()
                                                     }
                                                 }
                                             )
@@ -3118,17 +3344,17 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                     .size(52.dp)
                                     .background(if (flashOn) ButterYellow else Color.White.copy(alpha = 0.2f), CircleShape)
                             ) {
-                                Icon(Icons.Default.Info, contentDescription = "Flash Toggle", tint = Color.White)
+                                Icon(Icons.Default.Info, contentDescription = stringResource(R.string.cd_flash_toggle), tint = Color.White)
                             }
                         }
                     }
                 } else {
                     Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Camera usage is disabled until permissions granted.", color = Color.White, textAlign = TextAlign.Center)
+                            Text(stringResource(R.string.camera_disabled), color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(onClick = { cameraPermissionState.launchPermissionRequest() }) {
-                                Text("Grant camera permission", color = Color.White)
+                                Text(stringResource(R.string.grant_camera), color = MaterialTheme.colorScheme.onPrimary)
                             }
                         }
                     }
@@ -3144,8 +3370,12 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                     // Show captured image preview
                     if (capturedPath != null) {
                         AsyncImage(
-                            model = capturedPath,
-                            contentDescription = "Captured image",
+                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                .data(capturedPath)
+                                .size(800, 440)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = stringResource(R.string.cd_captured_image),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(220.dp)
@@ -3168,13 +3398,13 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                     }
 
                     // OCR selectable text card
-                    Text("EXTRACTED TEXT:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                    Text(stringResource(R.string.extracted_text), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
                     Spacer(modifier = Modifier.height(6.dp))
                     androidx.compose.foundation.text.selection.SelectionContainer {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFFF3EFE6), RoundedCornerShape(14.dp))
+                                .background(SurfaceTertiary, RoundedCornerShape(14.dp))
                                 .padding(16.dp)
                         ) {
                             Text(
@@ -3189,7 +3419,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                     // Image assistant description text block
                     if (imageDescription.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("IMAGE DESCRIPTION:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                        Text(stringResource(R.string.image_description_label), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
                         Spacer(modifier = Modifier.height(6.dp))
                         Box(
                             modifier = Modifier
@@ -3207,12 +3437,17 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
 
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    // Hoisted action messages (non-composable context inside onClick)
+                    val savedScanMsg = stringResource(R.string.saved_scan)
+                    val copiedMsg = stringResource(R.string.copied_clipboard)
+                    val searchingMsg = stringResource(R.string.searching_related)
+
                     // Column of modern 44dp capsule rounded actionable buttons
                     Button(
                         onClick = {
                             if (imageOcrText.isNotEmpty()) {
                                 viewModel.saveOcrImageAsNote()
-                                Toast.makeText(context, "Saved scan successfully!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, savedScanMsg, Toast.LENGTH_SHORT).show()
                                 viewModel.navigateTo("home_list")
                             }
                         },
@@ -3222,7 +3457,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                             .fillMaxWidth()
                             .height(44.dp)
                     ) {
-                        Text("Save as note", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.save_as_note), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -3234,7 +3469,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                         Button(
                             onClick = {
                                 clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(imageOcrText))
-                                Toast.makeText(context, "Text copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, copiedMsg, Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = SurfaceTertiary),
                             shape = RoundedCornerShape(9999.dp),
@@ -3242,7 +3477,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                 .weight(1f)
                                 .height(44.dp)
                         ) {
-                            Text("Copy text", color = TextPrimary, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.copy_text), color = TextPrimary, fontWeight = FontWeight.Medium)
                         }
 
                         Button(
@@ -3261,7 +3496,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                 .weight(1f)
                                 .height(44.dp)
                         ) {
-                            Text("Describe image", color = TextPrimary, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.describe_image), color = TextPrimary, fontWeight = FontWeight.Medium)
                         }
                     }
 
@@ -3274,7 +3509,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                 val file = java.io.File(path)
                                 if (file.exists()) {
                                     viewModel.searchRelatedNotes(file.readBytes())
-                                    Toast.makeText(context, "Searching related notes in AI Chat history...", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, searchingMsg, Toast.LENGTH_LONG).show()
                                     viewModel.navigateTo("home_list")
                                 }
                             }
@@ -3288,7 +3523,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Search, null, tint = TextPrimary, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Search Related Notes", color = TextPrimary, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.search_related_notes), color = TextPrimary, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -3307,62 +3542,71 @@ fun FloatingDock(
     onAddClick: () -> Unit,
     onProfileClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val noteViewModel: NoteViewModel = viewModel()
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 16.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
-        Row(
+        val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+        Surface(
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp,
+            shape = RoundedCornerShape(9999.dp),
+            color = SurfaceElevated,
             modifier = Modifier
                 .width(280.dp)
                 .height(64.dp)
-                .background(Color.White, RoundedCornerShape(9999.dp))
-                .border(1.dp, Color(0xFFF0F0F0), RoundedCornerShape(999.dp)),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+                .border(1.dp, BorderSubtle, RoundedCornerShape(999.dp))
         ) {
-            // Home
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable(onClick = { onHomeClick() })
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Home,
-                    contentDescription = "Home",
-                    tint = if (activeTab == "home") ButterYellow else TextSecondary
-                )
-                if (activeTab == "home") {
-                    Box(modifier = Modifier.padding(top = 2.dp).size(4.dp).background(ButterYellow, CircleShape))
+                // Home
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable(onClick = { onHomeClick() })
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = stringResource(R.string.cd_home),
+                        tint = if (activeTab == "home") ButterYellow else TextSecondary
+                    )
+                    if (activeTab == "home") {
+                        Box(modifier = Modifier.padding(top = 2.dp).size(4.dp).background(ButterYellow, CircleShape))
+                    }
                 }
-            }
 
-            // Floating Add FAB
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(ButterYellow, CircleShape)
-                    .clickable(onClick = { onAddClick() }),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(24.dp))
-            }
+                // Floating Add FAB
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(ButterYellow, CircleShape)
+                        .clickable(onClick = {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onAddClick()
+                        }),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                }
 
-            // Settings/Profile
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable(onClick = { onProfileClick() })
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Profile",
-                    tint = if (activeTab == "profile") ButterYellow else TextSecondary
-                )
-                if (activeTab == "profile") {
-                    Box(modifier = Modifier.padding(top = 2.dp).size(4.dp).background(ButterYellow, CircleShape))
+                // Settings/Profile
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable(onClick = { onProfileClick() })
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = stringResource(R.string.cd_profile),
+                        tint = if (activeTab == "profile") ButterYellow else TextSecondary
+                    )
+                    if (activeTab == "profile") {
+                        Box(modifier = Modifier.padding(top = 2.dp).size(4.dp).background(ButterYellow, CircleShape))
+                    }
                 }
             }
         }

@@ -1,9 +1,17 @@
 package com.example.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "notes")
+@Entity(
+    tableName = "notes",
+    indices = [
+        Index(value = ["tags"]),
+        Index(value = ["isPinned"]),
+        Index(value = ["createdAt"])
+    ]
+)
 data class Note(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val noteUuid: String = java.util.UUID.randomUUID().toString(),

@@ -25,41 +25,26 @@ class AuthViewModel(private val authRepository: AuthRepository, private val cont
         val IS_LOGGED_IN_KEY = booleanPreferencesKey("is_logged_in")
     }
 
-    private val _authState = MutableStateFlow<AuthUiState>(AuthUiState.Loading)
+    private val _authState = MutableStateFlow<AuthUiState>(AuthUiState.LoggedOut)
     val authState: StateFlow<AuthUiState> = _authState
 
     init {
-        // Observe local datastore preferences for login status first.
         viewModelScope.launch {
-            context.dataStore.data.collect { preferences ->
-                val isMockLoggedIn = preferences[IS_LOGGED_IN_KEY] ?: false
-                if (isMockLoggedIn) {
-                    _authState.value = AuthUiState.LoggedIn
-                } else if (authRepository.isLoggedIn.value) {
-                    _authState.value = AuthUiState.LoggedIn
-                } else {
-                    _authState.value = AuthUiState.LoggedOut
+            combine(
+                context.dataStore.data.map { it[IS_LOGGED_IN_KEY] ?: false },
+                authRepository.isLoggedIn
+            ) { prefLoggedIn, firebaseLoggedIn -> prefLoggedIn || firebaseLoggedIn }
+                .distinctUntilChanged()
+                .collect { loggedIn ->
+                    _authState.value = if (loggedIn) AuthUiState.LoggedIn else AuthUiState.LoggedOut
+                    setLoggedInPref(loggedIn)
                 }
-            }
         }
+    }
 
-        // Observe login status from Firebase Auth
-        viewModelScope.launch {
-            authRepository.isLoggedIn.collect { loggedIn ->
-                if (loggedIn) {
-                    _authState.value = AuthUiState.LoggedIn
-                    setLoggedInPref(true)
-                } else {
-                    context.dataStore.data.first().let { preferences ->
-                        val isMockLoggedIn = preferences[IS_LOGGED_IN_KEY] ?: false
-                        if (!isMockLoggedIn) {
-                            _authState.value = AuthUiState.LoggedOut
-                            setLoggedInPref(false)
-                        }
-                    }
-                }
-            }
-        }
+    override fun onCleared() {
+        super.onCleared()
+        authRepository.clear()
     }
 
     private suspend fun setLoggedInPref(value: Boolean) {
@@ -184,6 +169,24 @@ class AuthViewModel(private val authRepository: AuthRepository, private val cont
             }
             _authState.value = AuthUiState.LoggedOut
             onSuccess()
+        }
+    }
+
+    fun sendPasswordResetEmail(email: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        _authState.value = AuthUiState.Loading
+        viewModelScope.launch {
+            val result = authRepository.sendPasswordResetEmail(email)
+            result.fold(
+                onSuccess = {
+                    _authState.value = AuthUiState.LoggedOut
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    val message = error.message ?: "Failed to send reset email"
+                    _authState.value = AuthUiState.Error(message)
+                    onError(message)
+                }
+            )
         }
     }
 
