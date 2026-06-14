@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "notes",
     indices = [
+        Index(value = ["noteUuid"], unique = true),
         Index(value = ["tags"]),
         Index(value = ["isPinned"]),
         Index(value = ["createdAt"])

@@ -90,14 +90,13 @@ class MainActivity : ComponentActivity() {
             val repository = NoteRepository(database.noteDao())
             
             // Factory injection to provide Repository to NoteViewModel
+            val authRepository = remember { AuthRepository() }
             val noteViewModel: NoteViewModel = viewModel(factory = object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     @Suppress("UNCHECKED_CAST")
-                    return NoteViewModel(repository, context.applicationContext) as T
+                    return NoteViewModel(repository, context.applicationContext, authRepository) as T
                 }
             })
-
-            val authRepository = remember { AuthRepository() }
             val authViewModel: AuthViewModel = viewModel(factory = object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     @Suppress("UNCHECKED_CAST")
@@ -125,7 +124,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppHost(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
-    val isLoggedIn by authViewModel.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = false)
+    // Read Firebase Auth state directly so the splash route is correct on cold
+    // start with a persisted session. DataStore-backed flows can lag.
+    val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+    val isLoggedIn = currentUser != null && !currentUser.isAnonymous
     
     Box(
         modifier = Modifier
@@ -260,7 +262,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
                 ) {
                     Text("9:41", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(10.dp))
+                        Icon(Icons.Default.SignalCellularAlt, null, modifier = Modifier.size(10.dp))
                     }
                 }
 
@@ -275,7 +277,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            "Meeting notes — Q4 planning",
+                            stringResource(R.string.onboarding_mock_note_title),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
@@ -286,7 +288,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
                                 .background(ButterSoft, RoundedCornerShape(12.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text("WORK", fontSize = 9.sp, color = AccentDeep, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.onboarding_mock_chip), fontSize = 9.sp, color = AccentDeep, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
@@ -319,7 +321,7 @@ fun Onboarding1Screen(viewModel: NoteViewModel) {
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("✨ Summarize discussion", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.onboarding_mock_summarize), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -424,9 +426,9 @@ fun Onboarding2Screen(viewModel: NoteViewModel) {
 
                 // Folders setup list
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OnboardingFolderRow("Action items", true)
-                    OnboardingFolderRow("Ideas (12 notes)", false)
-                    OnboardingFolderRow("Meeting notes (8 notes)", false)
+                    OnboardingFolderRow(stringResource(R.string.onboarding_mock_folder_action), true)
+                    OnboardingFolderRow(stringResource(R.string.onboarding_mock_folder_ideas), false)
+                    OnboardingFolderRow(stringResource(R.string.onboarding_mock_folder_meeting), false)
                 }
             }
         }
@@ -483,7 +485,7 @@ fun OnboardingFolderRow(title: String, active: Boolean) {
                     .background(SurfaceTertiary, RoundedCornerShape(6.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(12.dp), tint = TextSecondary)
+                Icon(Icons.Default.Folder, null, modifier = Modifier.size(12.dp), tint = TextSecondary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(title, fontSize = 11.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
@@ -552,12 +554,12 @@ fun Onboarding3Screen(viewModel: NoteViewModel) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                             Box(modifier = Modifier.background(ButterSoft, RoundedCornerShape(12.dp)).padding(8.dp)) {
-                                Text("Summarize my week", fontSize = 9.sp, color = TextPrimary)
+                                Text(stringResource(R.string.onboarding_mock_summarize_request), fontSize = 9.sp, color = TextPrimary)
                             }
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                             Box(modifier = Modifier.background(SurfaceTertiary, RoundedCornerShape(12.dp)).padding(8.dp)) {
-                                Text("✨ Collected 12 research links and identified 3 action items.", fontSize = 9.sp, color = TextPrimary)
+                                Text(stringResource(R.string.onboarding_mock_summarize_response), fontSize = 9.sp, color = TextPrimary)
                             }
                         }
                     }
@@ -984,7 +986,6 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 if (isRegisterMode) {
                     authViewModel.signUpWithEmail(email, password, {
                         isLocalLoading = false
-                        viewModel.isLoggedIn.value = true
                         viewModel.navigateTo("home_list")
                     }, {
                         isLocalLoading = false
@@ -993,7 +994,6 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                 } else {
                     authViewModel.signInWithEmail(email, password, {
                         isLocalLoading = false
-                        viewModel.isLoggedIn.value = true
                         viewModel.navigateTo("home_list")
                     }, {
                         isLocalLoading = false
@@ -1065,8 +1065,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                         onSuccess = { idToken ->
                             authViewModel.signInWithGoogle(idToken, {
                                 isLocalLoading = false
-                                viewModel.isLoggedIn.value = true
-                                viewModel.navigateTo("home_list")
+                                        viewModel.navigateTo("home_list")
                             }, { msg ->
                                 isLocalLoading = false
                                 generalError = msg
@@ -1074,7 +1073,7 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                         },
                         onFailure = { err ->
                             isLocalLoading = false
-                            generalError = err.message ?: "Gagal login dengan Google."
+                            generalError = err.message ?: context.getString(R.string.google_err_default)
                         }
                     )
                 }
@@ -1118,7 +1117,6 @@ fun LoginScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                     isLocalLoading = true
                     authViewModel.signInAnonymously({
                         isLocalLoading = false
-                        viewModel.isLoggedIn.value = true
                         viewModel.navigateTo("home_list")
                     }, {
                         isLocalLoading = false
@@ -1208,7 +1206,12 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                 verticalAlignment = Alignment.Bottom
             ) {
                 Column {
-                    Text(stringResource(R.string.greeting_morning), fontSize = 14.sp, color = TextSecondary)
+                    val greetingRes = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
+                        in 12..17 -> R.string.greeting_afternoon
+                        in 18..4 -> R.string.greeting_evening
+                        else -> R.string.greeting_morning
+                    }
+                    Text(stringResource(greetingRes), fontSize = 14.sp, color = TextSecondary)
                     Text(stringResource(R.string.title_notes), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 }
 
@@ -1295,8 +1298,8 @@ fun MainDashboard(viewModel: NoteViewModel, isGrid: Boolean) {
                 CategoryChip(stringResource(R.string.filter_briefing), false, onClick = { viewModel.navigateTo("briefing") })
             }
 
-            val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-            val isGuest = firebaseUser == null || firebaseUser.isAnonymous
+            val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
+            val isGuest = !isLoggedIn
             val syncError by viewModel.lastSyncError.collectAsStateWithLifecycle()
             if (syncError != null) {
                 Row(
@@ -1453,7 +1456,7 @@ fun NoteListRow(note: Note, onClick: () -> Unit, viewModel: NoteViewModel, modif
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (note.title.isBlank()) "Untitled note" else note.title,
+                text = if (note.title.isBlank()) stringResource(R.string.note_untitled) else note.title,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
@@ -1472,7 +1475,7 @@ fun NoteListRow(note: Note, onClick: () -> Unit, viewModel: NoteViewModel, modif
             ) {
                 Icon(
                     imageVector = if (note.isPinned) Icons.Default.PushPin else Icons.Default.BookmarkAdd,
-                    contentDescription = if (note.isPinned) "Unpin" else "Pin",
+                    contentDescription = if (note.isPinned) stringResource(R.string.note_unpin) else stringResource(R.string.note_pin),
                     tint = if (note.isPinned) AccentDeep else TextTertiary,
                     modifier = Modifier.size(16.dp)
                 )
@@ -1485,7 +1488,7 @@ fun NoteListRow(note: Note, onClick: () -> Unit, viewModel: NoteViewModel, modif
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = if (note.body.isBlank()) stringResource(R.string.empty_content) else note.body.replace("\n", " "),
+                text = if (note.body.isBlank()) stringResource(R.string.note_empty_body) else note.body.replace("\n", " "),
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = TextSecondary,
@@ -1546,7 +1549,7 @@ fun NoteGridCard(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = if (note.title.isBlank()) stringResource(R.string.untitled_note) else note.title,
+                    text = if (note.title.isBlank()) stringResource(R.string.note_untitled) else note.title,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
@@ -1560,7 +1563,7 @@ fun NoteGridCard(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
                 ) {
                     Icon(
                         imageVector = if (note.isPinned) Icons.Default.PushPin else Icons.Default.BookmarkAdd,
-                        contentDescription = if (note.isPinned) "Unpin" else "Pin",
+                        contentDescription = if (note.isPinned) stringResource(R.string.note_unpin) else stringResource(R.string.note_pin),
                         tint = if (note.isPinned) AccentDeep else TextTertiary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -1596,7 +1599,7 @@ fun NoteGridCard(note: Note, onClick: () -> Unit, viewModel: NoteViewModel) {
                 }
             } else {
                 Text(
-                    text = if (note.body.isBlank()) "Empty content..." else note.body,
+                    text = if (note.body.isBlank()) stringResource(R.string.note_empty_body) else note.body,
                     fontSize = 13.sp,
                     color = TextSecondary,
                     maxLines = 4,
@@ -1958,7 +1961,7 @@ fun EditorScreen(viewModel: NoteViewModel) {
                     .size(56.dp)
                     .background(ButterYellow, CircleShape)
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.ask_noteai), tint = MaterialTheme.colorScheme.onPrimary)
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.ask_noteai), tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }
@@ -2038,7 +2041,7 @@ fun VoiceMemoViewBlock(duration: String) {
                 .background(ButterSoft, CircleShape)
         ) {
             Icon(
-                imageVector = if (isPlaying) Icons.Default.Refresh else Icons.Default.Info,  // Play/Pause simulation
+                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = null,
                 tint = AccentDeep,
                 modifier = Modifier.size(20.dp)
@@ -2224,8 +2227,9 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
     }
 
     // Open action items: unchecked checklist entries from any note.
+    val untitledLabel = stringResource(R.string.untitled_note)
     val openActions = remember(notes) {
-        data class OpenAction(val text: String, val noteTitle: String)
+        data class OpenAction(val noteId: Long, val text: String, val noteTitle: String)
         val list = mutableListOf<OpenAction>()
         for (note in notes) {
             val json = note.checklistJson ?: continue
@@ -2237,8 +2241,9 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
                         val text = obj.optString("text").trim()
                         if (text.isNotEmpty()) {
                             list += OpenAction(
+                                noteId = note.id,
                                 text = text,
-                                noteTitle = note.title.ifBlank { "Untitled note" }
+                                noteTitle = note.title.ifBlank { untitledLabel }
                             )
                         }
                     }
@@ -2328,7 +2333,7 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = note.title.ifBlank { "Untitled note" },
+                                        text = note.title.ifBlank { stringResource(R.string.note_untitled) },
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = TextPrimary,
@@ -2368,7 +2373,11 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
                         )
                     } else {
                         openActions.forEach { action ->
-                            ActionCheckRow(action.text, action.noteTitle)
+                            ActionCheckRow(
+                                text = action.text,
+                                subtitle = action.noteTitle,
+                                onToggle = { viewModel.toggleChecklistItemByText(action.noteId, action.text) }
+                            )
                         }
                     }
                 }
@@ -2380,29 +2389,34 @@ fun DailyBriefingScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) 
 }
 
 @Composable
-fun ActionCheckRow(title: String, subtitle: String) {
-    var checked by remember { mutableStateOf(false) }
+fun ActionCheckRow(
+    text: String,
+    subtitle: String,
+    onToggle: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { checked = !checked },
+            .clickable { onToggle() },
         verticalAlignment = Alignment.Top
     ) {
         Box(
             modifier = Modifier
                 .padding(top = 2.dp)
                 .size(18.dp)
-                .border(2.dp, if (checked) SuccessSage else BorderStrong, RoundedCornerShape(4.dp))
-                .background(if (checked) SuccessSage else Color.Transparent, RoundedCornerShape(4.dp)),
+                .border(2.dp, BorderStrong, RoundedCornerShape(4.dp)),
             contentAlignment = Alignment.Center
         ) {
-            if (checked) {
-                Icon(Icons.Default.Check, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onPrimary)
-            }
+            Icon(
+                imageVector = Icons.Default.RadioButtonUnchecked,
+                contentDescription = null,
+                tint = BorderStrong,
+                modifier = Modifier.size(12.dp)
+            )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column {
-            Text(title, fontSize = 15.sp, color = if (checked) TextSecondary else TextPrimary, textDecoration = if (checked) TextDecoration.LineThrough else null)
+            Text(text, fontSize = 15.sp, color = TextPrimary)
             Text(subtitle, fontSize = 11.sp, color = TextTertiary)
         }
     }
@@ -2471,10 +2485,10 @@ fun AskNoteAiChatOverlay(viewModel: NoteViewModel, onClose: () -> Unit) {
                             Spacer(modifier = Modifier.height(12.dp))
                             // Suggestion chips
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                ChatSuggestChip("Summarize my notes from this week") {
+                                ChatSuggestChip(stringResource(R.string.suggest_summarize_week)) {
                                     viewModel.speakToAI("Summarize my notes from this week")
                                 }
-                                ChatSuggestChip("What should I prioritize today?") {
+                                ChatSuggestChip(stringResource(R.string.suggest_prioritize_today)) {
                                     viewModel.speakToAI("What should I prioritize today?")
                                 }
                             }
@@ -2693,9 +2707,9 @@ fun SearchScreen(viewModel: NoteViewModel) {
                     .padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                CategoryChip("All", filterChip == "All", onClick = { viewModel.filterChip.value = "All" })
-                CategoryChip("Notes", filterChip == "Ideas", onClick = { viewModel.filterChip.value = "Ideas" })
-                CategoryChip("Tasks", filterChip == "Action items", onClick = { viewModel.filterChip.value = "Action items" })
+                CategoryChip(stringResource(R.string.filter_all), filterChip == "All", onClick = { viewModel.filterChip.value = "All" })
+                CategoryChip(stringResource(R.string.search_chip_notes), filterChip == "Ideas", onClick = { viewModel.filterChip.value = "Ideas" })
+                CategoryChip(stringResource(R.string.search_chip_tasks), filterChip == "Action items", onClick = { viewModel.filterChip.value = "Action items" })
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -2723,10 +2737,10 @@ fun SearchScreen(viewModel: NoteViewModel) {
                                 .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Refresh, null, tint = TextSecondary, modifier = Modifier.size(20.dp)) // simulated schedule/recent clock icon
+                            Icon(Icons.Default.History, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = if (note.title.isBlank()) "Untitled note" else note.title,
+                                text = if (note.title.isBlank()) stringResource(R.string.note_untitled) else note.title,
                                 fontSize = 15.sp,
                                 color = TextPrimary
                             )
@@ -2912,7 +2926,7 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
                     }
                     Text(accountEmail, fontSize = 12.sp, color = TextSecondary)
                 }
-                Icon(Icons.Default.Check, null, tint = TextTertiary) // arrow trailing simulation
+                Icon(Icons.Filled.KeyboardArrowRight, null, tint = TextTertiary)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -2967,14 +2981,16 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             // AI SETTINGS
             SettingsSectionHeader(stringResource(R.string.ai_configurations))
             SettingsRowClick(stringResource(R.string.model), selectedModel) {
-                viewModel.setSelectedModel("Gemini 3.5 Flash")
+                val next = viewModel.availableModels
+                val idx = next.indexOf(selectedModel).coerceAtLeast(0)
+                viewModel.setSelectedModel(next[(idx + 1) % next.size])
             }
 
             // Gemini API Key Input
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Text(stringResource(R.string.gemini_api_key), fontSize = 14.sp, color = TextPrimary)
                 Spacer(modifier = Modifier.height(8.dp))
-                var apiKeyInput by remember { mutableStateOf(geminiApiKey) }
+                var apiKeyInput by remember(geminiApiKey) { mutableStateOf(geminiApiKey) }
                 var showApiKey by remember { mutableStateOf(false) }
                 OutlinedTextField(
                     value = apiKeyInput,
@@ -3050,7 +3066,6 @@ fun SettingsScreen(viewModel: NoteViewModel, authViewModel: AuthViewModel) {
             Button(
                 onClick = {
                     authViewModel.signOut {
-                        viewModel.isLoggedIn.value = false
                         viewModel.navigateTo("login")
                     }
                 },
@@ -3117,7 +3132,7 @@ fun SettingsRowClick(title: String, value: String, onClick: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(value, fontSize = 14.sp, color = TextSecondary)
             Spacer(modifier = Modifier.width(4.dp))
-            Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp), tint = TextSecondary)
+            Icon(Icons.Filled.KeyboardArrowRight, null, modifier = Modifier.size(16.dp), tint = TextSecondary)
         }
     }
     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(BorderSubtle))
@@ -3134,7 +3149,7 @@ fun SettingsRowAction(title: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(title, fontSize = 14.sp, color = TextPrimary)
-        Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp), tint = TextSecondary)
+        Icon(Icons.Filled.KeyboardArrowRight, null, modifier = Modifier.size(16.dp), tint = TextSecondary)
     }
     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(BorderSubtle))
 }
@@ -3181,7 +3196,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                     showCameraPreview = false
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Error reading image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.error_reading_image, e.localizedMessage ?: ""), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -3291,7 +3306,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                     .size(52.dp)
                                     .background(Color.White.copy(alpha = 0.2f), CircleShape)
                             ) {
-                                Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.cd_gallery), tint = Color.White)
+                                Icon(Icons.Default.Image, contentDescription = stringResource(R.string.cd_gallery), tint = Color.White)
                             }
 
                             // Capture Shutter Button
@@ -3344,7 +3359,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                     .size(52.dp)
                                     .background(if (flashOn) ButterYellow else Color.White.copy(alpha = 0.2f), CircleShape)
                             ) {
-                                Icon(Icons.Default.Info, contentDescription = stringResource(R.string.cd_flash_toggle), tint = Color.White)
+                                Icon(Icons.Default.FlashOn, contentDescription = stringResource(R.string.cd_flash_toggle), tint = Color.White)
                             }
                         }
                     }
@@ -3408,7 +3423,7 @@ fun WhiteboardOcrScreen(viewModel: NoteViewModel) {
                                 .padding(16.dp)
                         ) {
                             Text(
-                                text = if (imageOcrText.isEmpty()) "Scanning and reading text form factor..." else imageOcrText,
+                                text = if (imageOcrText.isEmpty()) stringResource(R.string.scanning_placeholder) else imageOcrText,
                                 fontSize = 14.sp,
                                 color = TextPrimary,
                                 style = MaterialTheme.typography.bodyLarge

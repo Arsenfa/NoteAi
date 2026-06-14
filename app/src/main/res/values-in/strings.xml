@@ -194,4 +194,43 @@
     <string name="guest_mode_desc">Mode tamu offline</string>
     <string name="guest_plan">Paket tamu</string>
     <string name="pro_plan">Paket Pro</string>
+
+    <!-- Search screen chips -->
+    <string name="search_chip_notes">Catatan</string>
+    <string name="search_chip_tasks">Tugas</string>
+
+    <!-- Briefing action -->
+    <string name="action_completed">Tugas selesai</string>
+
+    <!-- Suggestion chips -->
+    <string name="suggest_prioritize_today">Apa yang harus diprioritaskan hari ini?</string>
+
+    <!-- Onboarding mockup copy -->
+    <string name="onboarding_mock_note_title">Catatan rapat — Q4 planning</string>
+    <string name="onboarding_mock_chip">KERJA</string>
+    <string name="onboarding_mock_summarize">✨ Ringkas diskusi</string>
+    <string name="onboarding_mock_summarize_request">Ringkas minggu ini</string>
+    <string name="onboarding_mock_summarize_response">✨ Mengumpulkan 12 tautan riset dan mengidentifikasi 3 action item.</string>
+    <string name="onboarding_mock_folder_action">Action items</string>
+    <string name="onboarding_mock_folder_ideas">Ide (12 catatan)</string>
+    <string name="onboarding_mock_folder_meeting">Catatan rapat (8 catatan)</string>
+
+    <!-- Visual search chat -->
+    <string name="visual_search_request">Cari Catatan Visual</string>
+
+    <!-- Note row fallback strings -->
+    <string name="note_pin">Sematkan</string>
+    <string name="note_unpin">Lepas sematan</string>
+    <string name="note_untitled">Catatan tanpa judul</string>
+    <string name="note_empty_body">Konten kosong…</string>
+
+    <!-- Captured image content description -->
+    <string name="cd_captured_image">Gambar yang diambil</string>
+
+    <!-- Google Auth errors -->
+    <string name="google_err_unknown_credential">Kredensial tidak dikenali.</string>
+    <string name="google_err_cancelled">Login Google dibatalkan.</string>
+    <string name="google_err_no_credential">Tidak ada akun Google yang tersedia di perangkat ini.</string>
+    <string name="google_err_generic">Gagal login dengan Google: %1$s</string>
+    <string name="google_err_default">Gagal login dengan Google.</string>
 </resources>

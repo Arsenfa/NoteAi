@@ -21,26 +21,33 @@ object GeminiService {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private var currentCall: Call? = null
+    private val activeCalls = mutableListOf<Call>()
 
     fun cancelCurrentRequest() {
-        currentCall?.cancel()
-        currentCall = null
+        // Snapshot the list so we don't hold the lock while cancelling.
+        val toCancel = synchronized(activeCalls) { activeCalls.toList() }
+        synchronized(activeCalls) { activeCalls.clear() }
+        toCancel.forEach { runCatching { it.cancel() } }
     }
 
     private fun getApiKey(): String {
         return BuildConfig.GEMINI_API_KEY
     }
 
-    suspend fun generateContent(prompt: String, systemInstruction: String? = null, apiKey: String? = null): String = withContext(Dispatchers.IO) {
+    private fun modelId(displayName: String): String = when (displayName) {
+        "Gemini 2.5 Pro" -> "gemini-2.5-pro"
+        "Gemini 2.5 Flash" -> "gemini-2.5-flash"
+        else -> "gemini-2.5-flash"
+    }
+
+    suspend fun generateContent(prompt: String, systemInstruction: String? = null, apiKey: String? = null, model: String = "Gemini 2.5 Flash"): String = withContext(Dispatchers.IO) {
         val key = if (!apiKey.isNullOrEmpty()) apiKey else getApiKey()
         if (key.isEmpty() || key == "MY_GEMINI_API_KEY") {
             Log.e(TAG, "API Key is missing or placeholder!")
             return@withContext "API Key belum diatur. Buka Settings untuk menambahkan Gemini API key kamu."
         }
 
-        // Using prompt-friendly default recommended model (gemini-3.5-flash)
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/${modelId(model)}:generateContent"
         val mediaType = "application/json; charset=utf-8".toMediaType()
 
         try {
@@ -72,8 +79,10 @@ object GeminiService {
                 .post(requestBody)
                 .build()
 
-            currentCall = client.newCall(request)
-            currentCall!!.execute().use { response ->
+            val call = client.newCall(request)
+            synchronized(activeCalls) { activeCalls.add(call) }
+            try {
+            call.execute().use { response ->
                 if (!response.isSuccessful) {
                     Log.e(TAG, "HTTP error: ${response.code}")
                     val errorMessage = when (response.code) {
@@ -106,6 +115,9 @@ object GeminiService {
                 }
                 return@withContext "Failed to parse response"
             }
+            } finally {
+                synchronized(activeCalls) { activeCalls.remove(call) }
+            }
         } catch (e: Exception) {
             if (e.message?.contains("Canceled") == true) {
                 Log.i(TAG, "Request was canceled")
@@ -113,18 +125,16 @@ object GeminiService {
                 Log.e(TAG, "Exception during call", e)
             }
             return@withContext "An error occurred: ${e.localizedMessage}"
-        } finally {
-            currentCall = null
         }
     }
 
-    suspend fun analyzeImage(bitmapBase64: String, mimeType: String, prompt: String, apiKey: String? = null): String = withContext(Dispatchers.IO) {
+    suspend fun analyzeImage(bitmapBase64: String, mimeType: String, prompt: String, apiKey: String? = null, model: String = "Gemini 2.5 Flash"): String = withContext(Dispatchers.IO) {
         val key = if (!apiKey.isNullOrEmpty()) apiKey else getApiKey()
         if (key.isEmpty() || key == "MY_GEMINI_API_KEY") {
             return@withContext "API Key belum diatur. Buka Settings untuk menambahkan Gemini API key kamu."
         }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/${modelId(model)}:generateContent"
         val mediaType = "application/json; charset=utf-8".toMediaType()
 
         try {
@@ -157,8 +167,10 @@ object GeminiService {
                 .post(requestBody)
                 .build()
 
-            currentCall = client.newCall(request)
-            currentCall!!.execute().use { response ->
+            val call = client.newCall(request)
+            synchronized(activeCalls) { activeCalls.add(call) }
+            try {
+            call.execute().use { response ->
                 if (!response.isSuccessful) {
                     Log.e(TAG, "HTTP error: ${response.code}")
                     val errorMessage = when (response.code) {
@@ -191,6 +203,9 @@ object GeminiService {
                 }
                 return@withContext "Failed to parse response"
             }
+            } finally {
+                synchronized(activeCalls) { activeCalls.remove(call) }
+            }
         } catch (e: Exception) {
             if (e.message?.contains("Canceled") == true) {
                 Log.i(TAG, "Request was canceled")
@@ -198,8 +213,6 @@ object GeminiService {
                 Log.e(TAG, "Exception during image analysis", e)
             }
             return@withContext "An error occurred: ${e.localizedMessage}"
-        } finally {
-            currentCall = null
         }
     }
 }

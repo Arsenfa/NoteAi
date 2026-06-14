@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__firebase__firebase_get_environment",
-      "mcp__firebase__*"
+      "mcp__firebase__*",
+      "WebFetch(*)"
     ]
   }
 }

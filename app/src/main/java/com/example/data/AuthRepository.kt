@@ -1,6 +1,5 @@
 package com.example.data
 
-import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -39,8 +38,17 @@ class AuthRepository {
             val result = auth.signInWithCredential(credential).await()
             _isLoggedIn.value = true
             Result.success(result)
+        } catch (e: FirebaseAuthException) {
+            val message = when (e.errorCode) {
+                "ERROR_INVALID_CREDENTIAL" -> "Gagal verifikasi Google. Coba lagi"
+                "ERROR_ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL" -> "Email ini sudah terdaftar dengan metode login lain"
+                "ERROR_NETWORK_REQUEST_FAILED" -> "Koneksi internet bermasalah. Coba lagi"
+                "ERROR_API_KEY_SUSPENDED" -> "API key Firebase ditangguhkan. Hubungi developer"
+                else -> e.message ?: "Gagal login dengan Google"
+            }
+            Result.failure(Exception(message))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(e.message ?: "Gagal login dengan Google"))
         }
     }
 
@@ -64,11 +72,13 @@ class AuthRepository {
                 "ERROR_TOO_MANY_REQUESTS" -> "Terlalu banyak percobaan. Coba lagi nanti"
                 "ERROR_USER_DISABLED" -> "Akun ini telah dinonaktifkan"
                 "ERROR_INVALID_CREDENTIAL" -> "Email atau password salah"
-                else -> "Email atau password salah"
+                "ERROR_NETWORK_REQUEST_FAILED" -> "Koneksi internet bermasalah. Coba lagi"
+                "ERROR_API_KEY_SUSPENDED" -> "API key Firebase ditangguhkan. Hubungi developer"
+                else -> e.message ?: "Email atau password salah"
             }
             Result.failure(Exception(message))
         } catch (e: Exception) {
-            Result.failure(Exception("Terjadi kesalahan. Coba lagi nanti"))
+            Result.failure(Exception(e.message ?: "Terjadi kesalahan. Coba lagi nanti"))
         }
     }
 
@@ -79,15 +89,17 @@ class AuthRepository {
             Result.success(result)
         } catch (e: FirebaseAuthException) {
             val message = when (e.errorCode) {
-                "ERROR_EMAIL_ALREADY_IN_USE" -> "Email sudah terdaftar. Silakan sign in"
+                "ERROR_EMAIL_ALREADY_IN_USE" -> "Email sudah terdaftar. Silakan masuk"
                 "ERROR_WEAK_PASSWORD" -> "Password terlalu lemah. Gunakan minimal 6 karakter"
                 "ERROR_INVALID_EMAIL" -> "Format email tidak valid"
                 "ERROR_TOO_MANY_REQUESTS" -> "Terlalu banyak percobaan. Coba lagi nanti"
-                else -> "Gagal membuat akun. Coba lagi nanti"
+                "ERROR_NETWORK_REQUEST_FAILED" -> "Koneksi internet bermasalah. Coba lagi"
+                "ERROR_API_KEY_SUSPENDED" -> "API key Firebase ditangguhkan. Hubungi developer"
+                else -> e.message ?: "Gagal membuat akun. Coba lagi nanti"
             }
             Result.failure(Exception(message))
         } catch (e: Exception) {
-            Result.failure(Exception("Terjadi kesalahan. Coba lagi nanti"))
+            Result.failure(Exception(e.message ?: "Terjadi kesalahan. Coba lagi nanti"))
         }
     }
 
@@ -96,32 +108,56 @@ class AuthRepository {
             val result = auth.signInAnonymously().await()
             _isLoggedIn.value = true
             Result.success(result)
+        } catch (e: FirebaseAuthException) {
+            val message = when (e.errorCode) {
+                "ERROR_OPERATION_NOT_ALLOWED" -> "Login tamu belum diaktifkan. Hubungi developer"
+                "ERROR_NETWORK_REQUEST_FAILED" -> "Koneksi internet bermasalah. Coba lagi"
+                "ERROR_API_KEY_SUSPENDED" -> "API key Firebase ditangguhkan. Hubungi developer"
+                else -> e.message ?: "Gagal masuk sebagai tamu"
+            }
+            Result.failure(Exception(message))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(e.message ?: "Gagal masuk sebagai tamu"))
         }
     }
 
     suspend fun linkAnonymousToEmail(email: String, password: String): Result<AuthResult> {
         return try {
-            val user = auth.currentUser ?: throw Exception("No user to link")
+            val user = auth.currentUser ?: throw Exception("Tidak ada sesi aktif")
             val credential = EmailAuthProvider.getCredential(email, password)
             val result = user.linkWithCredential(credential).await()
             _isLoggedIn.value = true
             Result.success(result)
+        } catch (e: FirebaseAuthException) {
+            val message = when (e.errorCode) {
+                "ERROR_EMAIL_ALREADY_IN_USE" -> "Email sudah terdaftar. Silakan masuk"
+                "ERROR_WEAK_PASSWORD" -> "Password terlalu lemah. Gunakan minimal 6 karakter"
+                "ERROR_INVALID_EMAIL" -> "Format email tidak valid"
+                "ERROR_CREDENTIAL_ALREADY_IN_USE" -> "Akun ini sudah terhubung dengan akun lain"
+                else -> e.message ?: "Gagal menghubungkan akun"
+            }
+            Result.failure(Exception(message))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(e.message ?: "Gagal menghubungkan akun"))
         }
     }
 
     suspend fun linkAnonymousToGoogle(idToken: String): Result<AuthResult> {
         return try {
-            val user = auth.currentUser ?: throw Exception("No user to link")
+            val user = auth.currentUser ?: throw Exception("Tidak ada sesi aktif")
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val result = user.linkWithCredential(credential).await()
             _isLoggedIn.value = true
             Result.success(result)
+        } catch (e: FirebaseAuthException) {
+            val message = when (e.errorCode) {
+                "ERROR_CREDENTIAL_ALREADY_IN_USE" -> "Akun Google ini sudah terhubung dengan akun lain"
+                "ERROR_INVALID_CREDENTIAL" -> "Gagal verifikasi Google. Coba lagi"
+                else -> e.message ?: "Gagal menghubungkan akun Google"
+            }
+            Result.failure(Exception(message))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(e.message ?: "Gagal menghubungkan akun Google"))
         }
     }
 
@@ -136,14 +172,15 @@ class AuthRepository {
             Result.success(Unit)
         } catch (e: FirebaseAuthException) {
             val message = when (e.errorCode) {
-                "ERROR_INVALID_EMAIL" -> "Invalid email format"
-                "ERROR_USER_NOT_FOUND" -> "No account found with this email"
-                "ERROR_TOO_MANY_REQUESTS" -> "Too many requests. Try again later"
-                else -> e.message ?: "Failed to send reset email"
+                "ERROR_INVALID_EMAIL" -> "Format email tidak valid"
+                "ERROR_USER_NOT_FOUND" -> "Tidak ada akun dengan email ini"
+                "ERROR_TOO_MANY_REQUESTS" -> "Terlalu banyak percobaan. Coba lagi nanti"
+                "ERROR_NETWORK_REQUEST_FAILED" -> "Koneksi internet bermasalah. Coba lagi"
+                else -> e.message ?: "Gagal mengirim email reset"
             }
             Result.failure(Exception(message))
         } catch (e: Exception) {
-            Result.failure(Exception("Failed to send reset email: ${e.message}"))
+            Result.failure(Exception(e.message ?: "Gagal mengirim email reset"))
         }
     }
 }

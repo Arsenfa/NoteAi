@@ -195,4 +195,40 @@
     <string name="guest_mode_desc">Offline guest mode</string>
     <string name="guest_plan">Guest plan</string>
     <string name="pro_plan">Pro plan</string>
+
+    <!-- Search screen chips -->
+    <string name="search_chip_notes">Notes</string>
+    <string name="search_chip_tasks">Tasks</string>
+
+    <!-- Briefing action -->
+    <string name="action_completed">Action completed</string>
+
+    <!-- Suggestion chips -->
+    <string name="suggest_prioritize_today">What should I prioritize today?</string>
+
+    <!-- Onboarding mockup copy -->
+    <string name="onboarding_mock_note_title">Meeting notes — Q4 planning</string>
+    <string name="onboarding_mock_chip">WORK</string>
+    <string name="onboarding_mock_summarize">✨ Summarize discussion</string>
+    <string name="onboarding_mock_summarize_request">Summarize my week</string>
+    <string name="onboarding_mock_summarize_response">✨ Collected 12 research links and identified 3 action items.</string>
+    <string name="onboarding_mock_folder_action">Action items</string>
+    <string name="onboarding_mock_folder_ideas">Ideas (12 notes)</string>
+    <string name="onboarding_mock_folder_meeting">Meeting notes (8 notes)</string>
+
+    <!-- Visual search chat -->
+    <string name="visual_search_request">Visual Search Notes</string>
+
+    <!-- Note row fallback strings -->
+    <string name="note_pin">Pin</string>
+    <string name="note_unpin">Unpin</string>
+    <string name="note_untitled">Untitled note</string>
+    <string name="note_empty_body">Empty content…</string>
+
+    <!-- Google Auth errors -->
+    <string name="google_err_unknown_credential">Unrecognized credential.</string>
+    <string name="google_err_cancelled">Google sign-in was cancelled.</string>
+    <string name="google_err_no_credential">No Google account is available on this device.</string>
+    <string name="google_err_generic">Failed to sign in with Google: %1$s</string>
+    <string name="google_err_default">Failed to sign in with Google.</string>
 </resources>

@@ -182,7 +182,7 @@ class AuthViewModel(private val authRepository: AuthRepository, private val cont
                     onSuccess()
                 },
                 onFailure = { error ->
-                    val message = error.message ?: "Failed to send reset email"
+                    val message = error.message ?: "Gagal mengirim email reset"
                     _authState.value = AuthUiState.Error(message)
                     onError(message)
                 }

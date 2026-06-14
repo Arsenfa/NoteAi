@@ -11,6 +11,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.AuthRepository
+import com.example.R
 import com.example.data.GeminiService
 import com.example.data.Note
 import com.example.data.NoteRepository
@@ -32,7 +34,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 val Context.dataStore by preferencesDataStore(name = "settings")
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class NoteViewModel(private val repository: NoteRepository, private val context: Context) : ViewModel() {
+class NoteViewModel(
+    private val repository: NoteRepository,
+    private val context: Context,
+    private val authRepository: AuthRepository? = null
+) : ViewModel() {
 
     private val syncManager = NoteSyncManager(repository)
     val isSyncing = MutableStateFlow(false)
@@ -50,7 +56,9 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     // Onboarding / Navigation state
     var currentScreen = MutableStateFlow("splash")
     var completedOnboarding = MutableStateFlow(false)
-    var isLoggedIn = MutableStateFlow(false)
+    var isLoggedIn = MutableStateFlow(
+        authRepository?.currentUser?.takeIf { !it.isAnonymous } != null
+    )
 
     // UI state
     val allNotes = repository.allNotes.stateIn(
@@ -124,7 +132,8 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     val isOfflineMode = MutableStateFlow(false)
     val appTheme = MutableStateFlow("Light") // "Light", "Dark"
     val dateFormatting = MutableStateFlow("DD/MM/YYYY")
-    val selectedModel = MutableStateFlow("Gemini 3.5 Flash")
+    val availableModels = listOf("Gemini 3.5 Flash", "Gemini 2.5 Flash", "Gemini 2.5 Pro")
+    val selectedModel = MutableStateFlow(availableModels.first())
     val currentLanguage = MutableStateFlow("Bahasa Indonesia") // "Bahasa Indonesia", "English"
     val geminiApiKey = MutableStateFlow("")
 
@@ -154,15 +163,24 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             }
         }
 
-        // Initial cloud sync on startup (only if logged in)
-        viewModelScope.launch {
-            isLoggedIn.filter { it }.firstOrNull()?.let {
-                triggerSync()
+        // Mirror the AuthRepository's login state and trigger an initial sync
+        // whenever the user becomes authenticated.
+        authRepository?.let { repo ->
+            viewModelScope.launch {
+                repo.isLoggedIn.collect { loggedIn ->
+                    val realUser = loggedIn && repo.currentUser?.isAnonymous != true
+                    if (realUser && !isLoggedIn.value) {
+                        isLoggedIn.value = true
+                        triggerSync()
+                    } else if (!realUser) {
+                        isLoggedIn.value = false
+                    }
+                }
             }
         }
     }
 
-    private var isSeeding = false
+    @Volatile private var isSeeding = false
 
     fun setOfflineMode(enabled: Boolean) {
         viewModelScope.launch {
@@ -190,13 +208,13 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                 preferences[CURRENT_LANGUAGE_KEY] = language
             }
             currentLanguage.value = language
-            
-            try {
-                if (context is android.app.Activity) {
-                    context.recreate()
-                }
-            } catch (e: Exception) {
-                Log.e("NoteViewModel", "Failed to recreate activity", e)
+
+            // Recreate the host Activity so localized resources reload. Guard
+            // against the Activity being mid-finish to avoid IllegalStateException.
+            val activity = context as? android.app.Activity
+            if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+                runCatching { activity.recreate() }
+                    .onFailure { Log.e("NoteViewModel", "Failed to recreate activity", it) }
             }
         }
     }
@@ -211,11 +229,12 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     }
 
     fun setSelectedModel(model: String) {
+        val safe = if (model in availableModels) model else availableModels.first()
         viewModelScope.launch {
             context.dataStore.edit { preferences ->
-                preferences[SELECTED_MODEL_KEY] = model
+                preferences[SELECTED_MODEL_KEY] = safe
             }
-            selectedModel.value = model
+            selectedModel.value = safe
         }
     }
 
@@ -325,14 +344,13 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             val currentId = activeNoteId.value
             if (currentId != null) {
                 viewModelScope.launch {
-                    try {
+                    runCatching {
                         val note = repository.getNoteByIdSync(currentId)
                         if (note != null && note.title.isBlank() && note.body.isBlank()) {
                             repository.deleteNoteById(currentId)
                         }
-                    } finally {
-                        currentScreen.value = screen
-                    }
+                    }.onFailure { Log.e("NoteViewModel", "Cleanup of empty note failed", it) }
+                    currentScreen.value = screen
                 }
                 return
             }
@@ -342,8 +360,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
 
     fun triggerSync() {
         if (isOfflineMode.value) return
-        val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (firebaseUser == null || firebaseUser.isAnonymous) {
+        if (!isLoggedIn.value) {
             // Guest/anonymous users: skip sync silently, no error banner
             return
         }
@@ -363,8 +380,8 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     fun toggleNotePin(noteId: Long) {
         viewModelScope.launch {
             repository.togglePin(noteId)
+            triggerSync()
         }
-        triggerSync()
     }
 
     // CRUD Note operations
@@ -379,13 +396,18 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             )
             val newId = repository.insertNote(emptyNote)
             selectActiveNote(newId)
+            triggerSync()
         }
-        triggerSync()
     }
+
+    private var lastSaveJob: kotlinx.coroutines.Job? = null
 
     fun updateActiveNote(title: String, body: String, tags: String, checklistJson: String? = null) {
         val currentId = activeNoteId.value ?: return
-        viewModelScope.launch {
+        lastSaveJob?.cancel()
+        lastSaveJob = viewModelScope.launch {
+            // Debounce per-keystroke writes so we don't spam Room + sync.
+            delay(500)
             val current = repository.getNoteByIdSync(currentId) ?: return@launch
             val updated = current.copy(
                 title = title,
@@ -396,8 +418,8 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                 cloudSynced = false
             )
             repository.insertNote(updated)
+            triggerSync()
         }
-        triggerSync()
     }
 
     fun deleteActiveNote() {
@@ -422,6 +444,25 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
     }
 
     // Checklist toggles
+    fun toggleChecklistItemByText(noteId: Long, text: String) {
+        viewModelScope.launch {
+            val note = repository.getNoteByIdSync(noteId) ?: return@launch
+            val jsonStr = note.checklistJson ?: return@launch
+            try {
+                val array = JSONArray(jsonStr)
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    if (obj.optString("text") == text) {
+                        toggleChecklistItem(noteId, i)
+                        return@launch
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("NoteViewModel", "Failed to toggle checklist by text", e)
+            }
+        }
+    }
+
     fun toggleChecklistItem(noteId: Long, index: Int) {
         viewModelScope.launch {
             val note = repository.getNoteByIdSync(noteId) ?: return@launch
@@ -437,6 +478,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                         updatedAt = System.currentTimeMillis()
                     )
                     repository.insertNote(updatedNote)
+                    triggerSync()
                 }
             } catch (e: Exception) {
                 Log.e("NoteViewModel", "Failed to toggle checklist item", e)
@@ -465,7 +507,8 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             val aiResponse = GeminiService.generateContent(
                 prompt = "$contextPrompt\n\nUser Question: $userMessage",
                 systemInstruction = systemInstruction,
-                apiKey = geminiApiKey.value.ifEmpty { null }
+                apiKey = geminiApiKey.value.ifEmpty { null },
+                model = selectedModel.value
             )
 
             updateChatHistory(ChatMessage(sender = "ai", content = aiResponse))
@@ -478,7 +521,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         isAiThinking.value = true
         viewModelScope.launch {
             val prompt = "Summarize this note in 2-3 extremely clear bullet points, pointing out final decisions:\nNote title: ${active.title}\nNote body: ${active.body}"
-            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
+            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null }, model = selectedModel.value)
 
             updateChatHistory(
                 ChatMessage(sender = "user", content = "Summarize this note"),
@@ -494,22 +537,32 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         isAiThinking.value = true
         viewModelScope.launch {
             val prompt = "Extract actionable items / to-do elements from this note. Format purely as a JSON Array of JSON Objects like: [{\"text\":\"Action item text\",\"checked\":false}] without any markdown wrapping (just raw payload)."
-            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
+            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null }, model = selectedModel.value)
             try {
-                // Parse checklist from generated content
-                val cleanResponse = response.replace("```json", "").replace("```", "").trim()
+                // Parse checklist from generated content. Strip markdown fences and
+                // locate the first JSON array in the response in case the model
+                // added a preamble or postamble.
+                var cleanResponse = response
+                    .replace("```json", "")
+                    .replace("```", "")
+                    .trim()
+                val firstBracket = cleanResponse.indexOf('[')
+                val lastBracket = cleanResponse.lastIndexOf(']')
+                if (firstBracket in 0..<lastBracket) {
+                    cleanResponse = cleanResponse.substring(firstBracket, lastBracket + 1)
+                }
                 val array = JSONArray(cleanResponse)
                 val updatedNote = active.copy(
                     checklistJson = array.toString(),
                     updatedAt = System.currentTimeMillis()
                 )
                 repository.insertNote(updatedNote)
-
+                triggerSync()
                 updateChatHistory(ChatMessage(sender = "ai", content = "I've extracted ${array.length()} tasks into your checklist! Check them off in your editor."))
             } catch (e: Exception) {
                 // Return simple checklist if JSON fails
                 val listPrompt = "List extracted tasks from this note as simple checklist lines, numbered."
-                val textResponse = GeminiService.generateContent(listPrompt, apiKey = geminiApiKey.value.ifEmpty { null })
+                val textResponse = GeminiService.generateContent(listPrompt, apiKey = geminiApiKey.value.ifEmpty { null }, model = selectedModel.value)
                 updateChatHistory(ChatMessage(sender = "ai", content = "Here are the extracted items:\n\n$textResponse"))
             }
             isAiThinking.value = false
@@ -520,7 +573,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         val active = activeNote.value ?: return
         viewModelScope.launch {
             val prompt = "Suggest exactly 3 lowercase, short single-word tags for this note content as a comma-separated list, e.g. 'ideas,cooking,travel'. Note content: ${active.body}"
-            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
+            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null }, model = selectedModel.value)
             val cleanTags = response.trim().replace(" ", "")
             if (cleanTags.isNotEmpty() && !cleanTags.startsWith("Error") && !cleanTags.startsWith("API")) {
                 val updated = active.copy(
@@ -528,6 +581,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                     updatedAt = System.currentTimeMillis()
                 )
                 repository.insertNote(updated)
+                triggerSync()
             }
         }
     }
@@ -537,7 +591,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
         if (active.body.isBlank()) return
         viewModelScope.launch {
             val prompt = "Generate a concise title of at most 4-5 words for this note body: ${active.body}. Return only the title text itself without enclosing quotes."
-            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null })
+            val response = GeminiService.generateContent(prompt, apiKey = geminiApiKey.value.ifEmpty { null }, model = selectedModel.value)
             val cleanTitle = response.trim()
             if (cleanTitle.isNotEmpty() && !cleanTitle.startsWith("Error")) {
                 val updated = active.copy(
@@ -545,6 +599,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
                     updatedAt = System.currentTimeMillis()
                 )
                 repository.insertNote(updated)
+                triggerSync()
             }
         }
     }
@@ -606,6 +661,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             )
             val newId = repository.insertNote(newNote)
             selectActiveNote(newId)
+            triggerSync()
         }
     }
 
@@ -667,7 +723,7 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             result.fold(
                 onSuccess = {
                     updateChatHistory(
-                        ChatMessage(sender = "user", content = "Visual Search Notes"),
+                        ChatMessage(sender = "user", content = context.getString(R.string.visual_search_request)),
                         ChatMessage(sender = "ai", content = it)
                     )
                 },
@@ -694,26 +750,6 @@ class NoteViewModel(private val repository: NoteRepository, private val context:
             )
             val newId = repository.insertNote(newNote)
             selectActiveNote(newId)
-        }
-    }
-
-    fun readImageTextFromUri(bytes: ByteArray, onResult: (String) -> Unit) {
-        viewModelScope.launch {
-            val ocrResult = aiRepository.ocrImage(bytes, apiKey = geminiApiKey.value.ifEmpty { null })
-            ocrResult.fold(
-                onSuccess = { onResult(it) },
-                onFailure = { onResult("Error: ${it.localizedMessage}") }
-            )
-        }
-    }
-
-    fun describeImageFromUri(bytes: ByteArray, onResult: (String) -> Unit) {
-        viewModelScope.launch {
-            val descResult = aiRepository.describeImage(bytes, apiKey = geminiApiKey.value.ifEmpty { null })
-            descResult.fold(
-                onSuccess = { onResult(it) },
-                onFailure = { onResult("Error: ${it.localizedMessage}") }
-            )
         }
     }
 

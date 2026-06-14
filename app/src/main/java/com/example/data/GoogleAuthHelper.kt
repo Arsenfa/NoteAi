@@ -7,6 +7,7 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
+import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
@@ -66,14 +67,14 @@ class GoogleAuthHelper(private val context: Context) {
                 val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data)
                 Result.success(googleIdToken.idToken)
             } else {
-                Result.failure(Exception("Kredensial tidak dikenali."))
+                Result.failure(Exception(context.getString(R.string.google_err_unknown_credential)))
             }
         } catch (_: GetCredentialCancellationException) {
-            Result.failure(Exception("Login Google dibatalkan."))
+            Result.failure(Exception(context.getString(R.string.google_err_cancelled)))
         } catch (_: NoCredentialException) {
-            Result.failure(Exception("Tidak ada akun Google yang tersedia di perangkat ini."))
+            Result.failure(Exception(context.getString(R.string.google_err_no_credential)))
         } catch (e: GetCredentialException) {
-            Result.failure(Exception("Gagal login dengan Google: ${e.message}"))
+            Result.failure(Exception(context.getString(R.string.google_err_generic, e.message ?: "")))
         } catch (e: Exception) {
             Result.failure(e)
         }
